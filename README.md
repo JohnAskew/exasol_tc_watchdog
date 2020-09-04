@@ -3,9 +3,10 @@
        tc_watchdog.sql
        
 # desc: 
-       Configuraable script to kill transaction conflicts and log and entry in the tc_log table (created in this script).
-       If there are no current transaction conflicts, then runnning this script will not impact anything; it will complete 
-       successfully without taking any action
+       Configuraable script to kill transaction conflicts and log and entry 
+       in the tc_log table (created in this script). If there are no current 
+       transaction conflicts, then runnning this script will not impact anything; 
+       it will complete successfully without taking any action
        
 # configurations:
     armed
@@ -29,7 +30,8 @@ EXECUTE SCRIPT tc_watchdog (armed,  aggressive_mode,  wait_time)
 
      If you are currently executing a long running job and other transactions are being 
      blocked by the long running job, this script can kill the long job. The script will 
-     look for transaction_conflicts that have no STOP_TIME (currently blocking) in the EXA_DBA_TRANSACTION_CONFLICTS table. 
+     look for transaction_conflicts that have no STOP_TIME (currently blocking) in the 
+     EXA_DBA_TRANSACTION_CONFLICTS table. 
 
      The conflict_session_id will be targeted for termination
      if:
