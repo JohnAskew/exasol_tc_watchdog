@@ -1,12 +1,12 @@
 # exasol_tc_watchdog
 # name:
        tc_watchdog.sql
---
+       
 # desc: 
        Configuraable script to kill transaction conflicts and log and entry in the tc_log table (created in this script).
        If there are no current transaction conflicts, then runnning this script will not impact anything; it will complete 
-       successfully without taking any action.
---
+       successfully without taking any action
+       
 # configurations:
     armed
       Whether to actually kill the transaction conflict. 
@@ -37,6 +37,6 @@ EXECUTE SCRIPT tc_watchdog (armed,  aggressive_mode,  wait_time)
         2. The variable wait_time is less than NOW - The EXA_DBA_TRANSACTION_CONFLICTS.start_time
         3. The variable armed is set to true. If armed is set to false, it will report what would have happened.
 
-       If you are running the script with aggressive_mode = EXECUTE SQL, 
-       it will only kill active SQL and leave the sessions in IDLE status alone. 
-       Running with aggressive_mode = 'ALL' will kill any blocking session.
+     If you are running the script with aggressive_mode = EXECUTE SQL, 
+     it will only kill active SQL and leave the sessions in IDLE status alone. 
+     Running with aggressive_mode = 'ALL' will kill any blocking session.
