@@ -38,55 +38,14 @@
 --=============================================================================
 
 --/
-CREATE OR REPLACE SCRIPT tc_watchdog(in_armed, in_aggression, in_wait)
+CREATE OR REPLACE LUA SCRIPT tc_watchdog(in_armed, in_aggressive, in_wait)
 
 AS 
-----=====================================
----- SETTINGS and SETTINGS Validation
-----=====================================
-
-valid_aggression = {'IDLE', 'EXECUTE SQL', 'ALL'} --Do not change me unless you know what you are doing
-
-armed = false                          -- Default: false - don't actually kill session, just report as if you did
-                                       --          true - kill the session and report it
-
-aggressive_mode = 'IDLE'               -- Default: IDLE = Only kill IDLE sessions; EXECUTE SQL = kill active sessions
-                                       --          EXECUTE SQL = Only kill active SQL
-                                       --          ALL - Kill anything blocking, IDLE or EXECUTE SQL, etc.
-
-wait_time = 300                        -- Seconds query has been in transaction conflict state. Base on 
-                                       --          field EXA_DBA_TRANSACTION_CONFLCTS.start_time
-
-if in_armed then
-   
-    armed = true
-    
-else
-
-    armed = false                       -- Set to true (lowercase) to actually kill sessions, otherwise, just pretend to and report.
-    
-end
-
-for _, value in ipairs(valid_aggression) do
-
-     if value == in_aggression then
-     
-         aggressive_mode = in_aggression
-
-     end -- end if
-     
-end -- end for
-
-if (tonumber(in_wait) and in_wait >= 0) then  
-
-      wait_time = in_wait                        -- Seconds query has been in running/IDLE. See EXA_DBA_SESSIONS.duration
-
-end -- end -if
-
 
 --=====================================
 -- local variables and tables
 --=====================================
+local my_session ='unknown'
 
 local session_list = {}
 
@@ -98,6 +57,12 @@ local reason_hold = 'tc_watchdog'
 
 local reason_failed = 'tc_watchdog unable to kill session'
 
+local reason_invalid_input_aggressive = 'Not executed --> Invalid aggressive_mode input'
+
+local reason_no_transaction_conflicts = 'No open transaction conflicts found meeting input criteria'
+
+local reason_invalid_input_wait_time = 'Not executed --> wait_time must be numeric & > 0'
+
 local user_hold = ''
 
 local status_hold = ''
@@ -106,6 +71,157 @@ local command_hold = ''
 
 local duration_hold = 0
 
+local armed_valid = false
+
+local aggressive_valid = false
+
+local wait_valid = false
+
+local valid_aggressive = {'IDLE', 'EXECUTE SQL', 'ALL'} --Do not change me unless you know what you are doing
+
+--=======================================
+-- Capture runtime session_id to report
+-- if the script execution failed due
+-- to inappropriate arguments being passed 
+-- to the script.
+
+local suc_sess, res_sess = pquery([[select to_char(current_session)]])
+
+if #res_sess then
+
+    my_sess = res_sess[1][1]
+    
+end
+
+--=======================================
+-- Defaults for inputs 
+--=======================================
+-- (template with default parameters and arguments)
+---Reason: Set up safe mode incase the script
+--         is run with inappropriate script arguments.
+--         We build a non-destructive argument 
+--         list to be used as the template or 
+--         default settings at runtime.
+--          At runtime, we instantiate a copy
+--          of the template and valiate the script
+--          inputs. The script inputs become
+--          active if they pass the edit tests,
+--          otherwise, our safety net is to use
+--          the default settings which do not
+--          kill any sessions, only report
+--          as if they did.
+
+
+local inputs = {}                        -- Template or Default input table object
+
+inputs.armed = false                     -- Default: false - don't actually kill session, just report as if you did
+                                         --          true - kill the session and report it
+
+inputs.aggressive_mode = 'IDLE'          -- Default: IDLE = Only kill IDLE sessions; EXECUTE SQL = kill active sessions
+                                         --          EXECUTE SQL = Only kill active SQL
+                                         --          ALL - Kill anything blocking, IDLE or EXECUTE SQL, etc.
+
+inputs.wait_time = 300                   -- Seconds query has been in transaction conflict state. Base on 
+                                         --          field EXA_DBA_TRANSACTION_CONFLCTS.start_time
+
+inputs.whoami = function (self) output("Session Runtime INFO: "..my_sess.." ran with options -->  aggressive_mode  is  "..self.aggressive_mode.."      wait_time is  "..self.wait_time) end 
+
+--=======================================
+-- Input valiation: Build input validation object
+--=======================================
+
+local runtime = inputs                   -- Our input validation table which will 
+                                         -- hold our runtime arguments as they 
+                                         -- are validated in the next step
+
+--=======================================
+-- Script arguments validation
+--=======================================
+
+if in_armed then
+   
+    runtime.armed = true
+    
+    armed_valid = true
+    
+end
+
+runtime.aggressive_mode = in_aggressive
+
+aggressive_valid = false
+
+for _, value in ipairs(valid_aggressive) do
+
+     if value == in_aggressive then
+           
+         aggressive_valid = true
+
+     end -- end if
+     
+end -- end for
+
+runtime.wait_time = in_wait                        -- Seconds query has been in running/IDLE. See EXA_DBA_SESSIONS.duration
+   
+if type(runtime.wait_time) == 'number' then
+    
+     if runtime.wait_time >= 0 then  
+      
+         wait_valid = true
+     
+     else
+     
+         wait_valid = false
+         
+     end -- end if
+     
+else
+
+    wait_valid = false
+
+end -- end -if
+
+if runtime.armed then
+    
+    if ( not aggressive_valid ) then -- or not wait_valid ) then
+     
+        sess_hold = 0
+        
+        reason_invalid_input_aggressive = (reason_invalid_input_aggressive.." : "..runtime.aggressive_mode)
+        
+         my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_invalid_input_aggressive..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
+
+         suc_ks_ins, res_ks_ins = pquery(my_sql_text)
+                  
+         if not suc_ks_ins then
+                  
+             output("Kill_session failed to insert log for invalid aggressive")
+                      
+         end -- end if
+                  
+         exit()
+       
+     end -- end if
+       
+     if ( not wait_valid ) then -- or not wait_valid ) then
+       
+          sess_hold = 0
+       
+           my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_invalid_input_wait_time..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
+
+           suc_ks_ins, res_ks_ins = pquery(my_sql_text)
+                  
+           exit()
+       
+       end -- end if
+       
+end -- end if
+
+--=====================================
+-- Debug display of runtime inputs
+--=====================================
+
+runtime:whoami()
+
 --=====================================
 -- Functions
 --=====================================
@@ -113,7 +229,7 @@ local duration_hold = 0
 local function kill_session(sess_hold, user_hold, status_hold, command_hold, duration_hold)
 ---------------------------------------
 
-    if armed then
+    if runtime.armed then
         
         suc1_ks, res1_ks = pquery([[kill session ]]..sess_hold)
             
@@ -129,9 +245,9 @@ local function kill_session(sess_hold, user_hold, status_hold, command_hold, dur
         
     if suc1_ks then
         
-        my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..sess_hold..[[,']]..reason_hold..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
+        my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_hold..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
        
-        if armed then
+        if runtime.armed then
         
             output("killed session "..sess_hold)
                   
@@ -161,7 +277,7 @@ local function kill_session(sess_hold, user_hold, status_hold, command_hold, dur
         
         output("kill_session --> killed session failed!")
             
-                my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..sess_hold..[[,']]..reason_fail..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
+                my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_fail..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
  
                 query(my_sql_text)
     
@@ -173,7 +289,7 @@ end -- end function
 -- Create a log table if not exists
 --=====================================
 
-local succ_cr_tbl, res_cr_tbl = pquery([[CREATE TABLE IF NOT EXISTS tc_log(kill_date timestamp, session_id varchar(20), reason varchar(100), user_name varchar(50), status varchar(50), command varchar(50), duration varchar(50))]])
+local succ_cr_tbl, res_cr_tbl = pquery([[CREATE TABLE IF NOT EXISTS tc_log(kill_date timestamp, script_session varchar(20), killed_session_id varchar(20), reason varchar(100), user_name varchar(50), status varchar(50), command varchar(50), duration varchar(50))]])
 
 if not succ_cr_tbl then
 
@@ -195,29 +311,31 @@ query([[FLUSH STATISTICS;]])
 -- Get Conflicting Transaction Sessions with IDLE/ACTIVE sessions
 --=====================================
 
-if aggressive_mode == 'ALL' then
+if runtime.aggressive_mode == 'ALL' then
 
     suc_sl, session_list = pquery([[with SUBR as (select
 
-			to_char(SESSION_ID) as SESSION_ID
+			to_char(s.SESSION_ID) as SESSION_ID
 			
-			, USER_NAME
+			, s.USER_NAME
 			
-			, STATUS
+			, s.STATUS
 			
-			, COMMAND_NAME
+			, s.COMMAND_NAME
 			
-			,right(duration,2) + 60*regexp_substr(duration, '(?<=:)[0-9]{2}(?=:)') + 3600 * regexp_substr(duration, '^[0-9]+(?=:)') as my_duration
+			,seconds_between((select systimestamp), tc.start_time) as my_duration
 		    
 		    from
 			    
-			    exa_dba_sessions
+			    exa_dba_sessions s 
+			    
+			    join exa_dba_transaction_conflicts tc on s.session_id =tc.conflict_session_id
 			
-			where to_char(session_id) in (select to_char(conflict_session_id) from exa_dba_transaction_conflicts where stop_time IS NULL) 
+			where to_char(s.session_id) in (select to_char(conflict_session_id) from exa_dba_transaction_conflicts where stop_time IS NULL) 
 			 
- 		      and session_id != '4'
+		     and s.session_id != '4'
 		     
-		      and temp_db_ram > 0 )
+		     and s.temp_db_ram > 0 )
 		     
 	select SUBR.session_id
 	
@@ -233,7 +351,7 @@ if aggressive_mode == 'ALL' then
 	  
 	    where SUBR.my_duration > :wt
 	    
-	  ]],{wt = wait_time})
+	  ]],{wt = runtime.wait_time})
 	  
 else 
     
@@ -277,11 +395,33 @@ else
 	  
 	    where SUBR.my_duration > :wt
 	    
-	  ]],{am = aggressive_mode, wt = wait_time})
+	  ]],{am = runtime.aggressive_mode, wt = runtime.wait_time})
 	 
 end -- end if
 	  
 if suc_sl then
+
+    if #session_list == 0 then
+    
+      sess_hold = 0
+      
+      reason_no_transaction_conflicts = (reason_no_transaction_conflicts.." --> "..runtime.aggressive_mode.." : "..runtime.wait_time)
+      
+      if runtime.aggressive_mode == 'ALL' then
+      
+           my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_no_transaction_conflicts..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
+
+           suc_ks_ins, res_ks_ins = pquery(my_sql_text)
+      
+      else
+      
+           my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_no_transaction_conflicts..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
+
+           suc_ks_ins, res_ks_ins = pquery(my_sql_text)
+           
+       end -- end if
+    
+    end -- end if
 
     for snum = 1, #session_list do
     
@@ -297,9 +437,10 @@ if suc_sl then
        
        suc = kill_session(sess_hold, user_hold, status_hold, command_hold, duration_hold)
        
-   end
-    
-end
+   end -- end for
+   
+   
+end -- end if
 
 /
 
