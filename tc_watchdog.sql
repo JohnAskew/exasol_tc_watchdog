@@ -1,7 +1,7 @@
 -- name: tc_watchdog.sql
 --
 -- desc: Configuraable script to kill transaction conflicts and log
---       and entry in the tc_log table (created in this script).
+--       an entry in the tc_log table (created in this script).
 --       If there are no current transaction conflicts, then runnning 
 --       this script will not impact anything; it will complete 
 --       successfully without taking any action.
@@ -14,7 +14,7 @@
 --              IDLE means only kill blocking sessions that are in IDLE status.
 --              EXECUTE SQL means kill blocking sessions that are currently active.
 --              ALL means kill any blocking transaction
---      wait_time = Seconds query has been in blocking sessions.   
+--      wait_time = Seconds session has been in blocking sessions.   
 --
 -- usage: EXECUTE SCRIPT tc_watchdog(armed, aggressive_mode, wait_time) <with output>; -- where <with output> is optional.
 --        
@@ -29,7 +29,8 @@
 --          1. The EXA_DBA_SESSIONS.status field matches the variable aggressive_mode
 --          2. The variable wait_time is less than NOW - The EXA_DBA_TRANSACTION_CONFLICTS.start_time
 --          3. The variable armed is set to true. If armed is set to false,
---             it will report what would have happened.
+--             it will display what would have happened but will not 
+--             write to the log.
 
 --       If you are running the script with aggressive_mode = EXECUTE SQL, it
 --       will only kill active SQL and leave the sessions in IDLE status alone.
@@ -57,7 +58,7 @@ local reason_hold = 'tc_watchdog'
 
 local reason_failed = 'tc_watchdog unable to kill session'
 
-local reason_invalid_input_aggressive = 'Not executed --> Invalid aggressive_mode input'
+local reason_invalid_input_aggressive = 'Not executed --> Invalid aggressive_mode argument'
 
 local reason_no_transaction_conflicts = 'No open transaction conflicts found meeting input criteria'
 
@@ -84,6 +85,7 @@ local valid_aggressive = {'IDLE', 'EXECUTE SQL', 'ALL'} --Do not change me unles
 -- if the script execution failed due
 -- to inappropriate arguments being passed 
 -- to the script.
+--=======================================
 
 local suc_sess, res_sess = pquery([[select to_char(current_session)]])
 
@@ -209,6 +211,12 @@ if runtime.armed then
            my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_invalid_input_wait_time..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
 
            suc_ks_ins, res_ks_ins = pquery(my_sql_text)
+           
+           if not suc_ks_ins then
+                  
+               output("Kill_session failed to insert log for invalid wait_time")
+                      
+           end -- end if
                   
            exit()
        
@@ -217,7 +225,10 @@ if runtime.armed then
 end -- end if
 
 --=====================================
--- Debug display of runtime inputs
+-- Debug display of runtime inputs.
+-- Will display session runtiime info
+-- if the EXECUTE SCRIPT is run with 
+-- the optional suffix "with output".
 --=====================================
 
 runtime:whoami()
@@ -277,7 +288,7 @@ local function kill_session(sess_hold, user_hold, status_hold, command_hold, dur
         
         output("kill_session --> killed session failed!")
             
-                my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_fail..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
+                my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_failed..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
  
                 query(my_sql_text)
     
@@ -315,21 +326,21 @@ if runtime.aggressive_mode == 'ALL' then
 
     suc_sl, session_list = pquery([[with SUBR as (select
 
-			to_char(s.SESSION_ID) as SESSION_ID
+	to_char(s.SESSION_ID) as SESSION_ID
 			
-			, s.USER_NAME
+	, s.USER_NAME
 			
-			, s.STATUS
+	, s.STATUS
 			
-			, s.COMMAND_NAME
+	, s.COMMAND_NAME
 			
-			,seconds_between((select systimestamp), tc.start_time) as my_duration
+	,seconds_between((select systimestamp), tc.start_time) as my_duration
 		    
-		    from
+	from
 			    
-			    exa_dba_sessions s 
+		exa_dba_sessions s 
 			    
-			    join exa_dba_transaction_conflicts tc on s.session_id =tc.conflict_session_id
+	    join exa_dba_transaction_conflicts tc on s.session_id =tc.conflict_session_id
 			
 			where to_char(s.session_id) in (select to_char(conflict_session_id) from exa_dba_transaction_conflicts where stop_time IS NULL) 
 			 
@@ -444,4 +455,4 @@ end -- end if
 
 /
 
-execute script tc_watchdog(true, 'ALL', 300) with output;
+execute script tc_watchdog(false, 'ALL', 300) with output;
