@@ -46,39 +46,39 @@ AS
 --=====================================
 -- local variables and tables
 --=====================================
-local my_session ='unknown'
+my_session ='unknown'
 
-local session_list = {}
+sess_hold = 0
 
-local sess_hold = 0
+user_hold = ''
 
-local stmt_hold = 0
+status_hold = ''
 
-local reason_hold = 'tc_watchdog'
+command_hold = ''
 
-local reason_failed = 'tc_watchdog unable to kill session'
+duration_hold = 0
 
-local reason_invalid_input_aggressive = 'Not executed --> Invalid aggressive_mode argument'
+session_list = {sess_hold = 0, user_hold = "", status_hold = "", command_hold = "", duration_hold = 0}
 
-local reason_no_transaction_conflicts = 'No open transaction conflicts found meeting input criteria'
+reason_hold = 'tc_watchdog'
 
-local reason_invalid_input_wait_time = 'Not executed --> wait_time must be numeric & > 0'
+reason_failed = 'tc_watchdog unable to kill session'
 
-local user_hold = ''
+reason_invalid_input_armed = ('Not run--> Argument {armed} invalid -- must be true or false. Read in '..tostring(in_armed))
 
-local status_hold = ''
+reason_invalid_input_aggressive = ('Not run --> Argument {aggressive_mode} invalid. Read in '..tostring(in_aggressive))
 
-local command_hold = ''
+reason_invalid_input_wait_time = ('Not run --> Argument {wait_time} -- must be numeric & > 0. Read in '..tostring(in_wait))
 
-local duration_hold = 0
+reason_no_transaction_conflicts = 'No open transaction conflicts found meeting input criteria'
 
-local armed_valid = false
+armed_valid = false
 
-local aggressive_valid = false
+aggressive_valid = false
 
-local wait_valid = false
+wait_valid = false
 
-local valid_aggressive = {'IDLE', 'EXECUTE SQL', 'ALL'} --Do not change me unless you know what you are doing
+valid_aggressive = {'IDLE', 'EXECUTE SQL', 'ALL'} --Do not change me unless you know what you are doing
 
 --=======================================
 -- Capture runtime session_id to report
@@ -114,16 +114,16 @@ end
 --          as if they did.
 
 
-local inputs = {}                        -- Template or Default input table object
+local inputs = {armed = false, aggressive_mode = 'IDLE', wait_time = 300}                        -- Template or Default input table object
 
-inputs.armed = false                     -- Default: false - don't actually kill session, just report as if you did
-                                         --          true - kill the session and report it
-
-inputs.aggressive_mode = 'IDLE'          -- Default: IDLE = Only kill IDLE sessions; EXECUTE SQL = kill active sessions
-                                         --          EXECUTE SQL = Only kill active SQL
-                                         --          ALL - Kill anything blocking, IDLE or EXECUTE SQL, etc.
-
-inputs.wait_time = 300                   -- Seconds query has been in transaction conflict state. Base on 
+--inputs.armed = false                     -- Default: false - don't actually kill session, just report as if you did
+--                                         --          true - kill the session and report it
+--
+--inputs.aggressive_mode = 'IDLE'          -- Default: IDLE = Only kill IDLE sessions; EXECUTE SQL = kill active sessions
+--                                         --          EXECUTE SQL = Only kill active SQL
+--                                         --          ALL - Kill anything blocking, IDLE or EXECUTE SQL, etc.
+--
+--inputs.wait_time = 300                   -- Seconds query has been in transaction conflict state. Base on 
                                          --          field EXA_DBA_TRANSACTION_CONFLCTS.start_time
 
 inputs.whoami = function (self) output("Session Runtime INFO: "..my_sess.." ran with options -->  aggressive_mode  is  "..self.aggressive_mode.."      wait_time is  "..self.wait_time) end 
@@ -140,13 +140,17 @@ local runtime = inputs                   -- Our input validation table which wil
 -- Script arguments validation
 --=======================================
 
-if in_armed then
-   
-    runtime.armed = true
-    
+if (string.upper(tostring(in_armed)) == 'FALSE'  or string.upper(tostring(in_armed)) == 'TRUE') then
+
     armed_valid = true
+
+    if in_armed then
+   
+        runtime.armed = true
+        
+    end  -- end if
     
-end
+end  -- end if
 
 runtime.aggressive_mode = in_aggressive
 
@@ -182,15 +186,31 @@ else
 
 end -- end -if
 
+if not armed_valid then
+
+     sess_hold = 0
+        
+      my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_invalid_input_armed..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
+
+      suc_ks_ins, res_ks_ins = pquery(my_sql_text)
+                  
+       if not suc_ks_ins then
+                  
+           output("Kill_session failed to insert log for invalid value for armed")
+                      
+       end -- end if
+                  
+       exit()
+    
+end
+
 if runtime.armed then
     
     if ( not aggressive_valid ) then -- or not wait_valid ) then
      
         sess_hold = 0
         
-        reason_invalid_input_aggressive = (reason_invalid_input_aggressive.." : "..runtime.aggressive_mode)
-        
-         my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_invalid_input_aggressive..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
+        my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_invalid_input_aggressive..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
 
          suc_ks_ins, res_ks_ins = pquery(my_sql_text)
                   
@@ -304,11 +324,11 @@ local succ_cr_tbl, res_cr_tbl = pquery([[CREATE TABLE IF NOT EXISTS tc_log(kill_
 
 if not succ_cr_tbl then
 
-  local error_txt = "Unable to allocate tc_log table to log results. Aborting"
+    local error_txt = "Unable to allocate tc_log table to log results. Aborting"
   
-  output("succ_cr_tbl:"..succ_cr_tbl.." Error: " ..error_txt)
+    output("succ_cr_tbl:"..succ_cr_tbl.." Error: " ..error_txt)
   
-  exit()
+    exit()
   
 end -- end if
 
@@ -454,5 +474,4 @@ if suc_sl then
 end -- end if
 
 /
-
 execute script tc_watchdog(false, 'ALL', 300) with output;
