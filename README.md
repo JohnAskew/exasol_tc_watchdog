@@ -3,7 +3,7 @@
        tc_watchdog.sql
        
 # desc: 
-       Configuraable script to kill transaction conflicts and log and entry 
+       Configuraable script to kill transaction conflicts and log an entry 
        in the tc_log table (created in this script). If there are no current 
        transaction conflicts, then runnning this script will not impact anything; 
        it will complete successfully without taking any action
@@ -13,6 +13,11 @@
       Whether to actually kill the transaction conflict. 
       False is "safe mode" where nothing will be killed. 
       True will actually kill a session causing the transction conflict.
+      
+      Armed will generate a log entry to show whether the script successfully
+      killed a transaction conflict, or was unable to execute properly
+      due to inappropriate arguements or there were no transaction 
+      conflicts found meeting the argument criteria.
     
     aggressive_mode
       What kind of EXA_DBA_SESSIONS.status to target for termination.
@@ -20,7 +25,7 @@
         EXECUTE SQL means kill blocking sessions that are currently active.
         ALL means kill any blocking transaction
       
-    wait_time = Seconds query has been in blocking sessions.   
+    wait_time = Seconds a session has been in blocking sessions.   
       
 # usage: 
 
