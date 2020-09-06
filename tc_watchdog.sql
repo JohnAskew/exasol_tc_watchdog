@@ -356,30 +356,30 @@ if runtime.aggressive_mode == 'ALL' then
 else 
     
     suc_sl, session_list = pquery([[with SUBR as (select
-
-			to_char(s.SESSION_ID) as SESSION_ID
+ 
+    to_char(s.SESSION_ID) as SESSION_ID
 			
-			, s.USER_NAME
+	, s.USER_NAME
 			
-			, s.STATUS
+	, s.STATUS
 			
-			, s.COMMAND_NAME
+	, s.COMMAND_NAME
 			
-			,seconds_between((select systimestamp), tc.start_time) as my_duration
+	,seconds_between((select systimestamp), tc.start_time) as my_duration
 		    
-		    from
+	from
 			    
-			    exa_dba_sessions s 
+		exa_dba_sessions s 
 			    
-			    join exa_dba_transaction_conflicts tc on s.session_id =tc.conflict_session_id
+	    join exa_dba_transaction_conflicts tc on s.session_id =tc.conflict_session_id
 			
-			where to_char(s.session_id) in (select to_char(conflict_session_id) from exa_dba_transaction_conflicts where stop_time IS NULL) 
+		where to_char(s.session_id) in (select to_char(conflict_session_id) from exa_dba_transaction_conflicts where stop_time IS NULL) 
 			 
-			 and s.status = :am
+		  and s.status = :am
 		     
-		     and s.session_id != '4'
+		  and s.session_id != '4'
 		     
-		     and s.temp_db_ram > 0 )
+		  and s.temp_db_ram > 0 )
 		     
 	select SUBR.session_id
 	
@@ -401,7 +401,7 @@ end -- end if
 	  
 if suc_sl then
 
-    if #session_list == 0 then
+    if (#session_list == 0 and runtime.armed ) then
     
       sess_hold = 0
       
@@ -444,4 +444,4 @@ end -- end if
 
 /
 
-execute script tc_watchdog(false, 'ALL', 300) with output;
+execute script tc_watchdog(true, 'ALL', 300) with output;
