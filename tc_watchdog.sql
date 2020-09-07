@@ -1,3 +1,4 @@
+--
 -- name: tc_watchdog.sql
 --
 -- desc: Configuraable script to kill transaction conflicts and log
@@ -36,6 +37,9 @@
 --       will only kill active SQL and leave the sessions in IDLE status alone.
 --       Running with aggressive_mode = 'ALL' will kill any blocking session.
 --
+-- To-Do:
+--       1. Change code to display inappropriate arguments when armed = false
+--       
 --=============================================================================
 
 --/
@@ -258,14 +262,29 @@ runtime:whoami()
 -- Functions
 --=====================================
 ---------------------------------------
-local function kill_session(sess_hold, user_hold, status_hold, command_hold, duration_hold)
+local function kill_session(...)
 ---------------------------------------
+       local kill_session_list = {...}
+       
+       sess_hold    = kill_session_list[1][1]
+       
+       user_hold    = kill_session_list[1][2]
+       
+       status_hold  = kill_session_list[1][3]
+       
+       command_hold = kill_session_list[1][4]
+       
+       duration_hold= kill_session_list[1][5]
 
     if runtime.armed then
         
         suc1_ks, res1_ks = pquery([[kill session ]]..sess_hold)
             
         query([[commit;]])
+        
+        my_log_text = ('Script session '..my_sess..' : killed  '..sess_hold..' : reason '..reason_hold..' : user '..user_hold..' : sql_status  '..status_hold..' : sql '..command_hold..' : wait '..duration_hold)
+        
+        suc_log,res_log = pquery([[select tc_syslogger('tc_watchdog', 'INFO', :mlt) from dual;]],{mlt=my_log_text})
             
     else
         
@@ -279,12 +298,6 @@ local function kill_session(sess_hold, user_hold, status_hold, command_hold, dur
         
         my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_hold..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
        
-        my_log_text = ('Script session '..my_sess..' : killed  '..sess_hold..' : reason '..reason_hold..' : user '..user_hold..' : sql_status  '..status_hold..' : sql '..command_hold..' : wait '..duration_hold)
-        
-        output(my_log_text)
-        
-        suc_log,res_log = pquery([[select tc_syslogger('tc_watchdog', 'INFO', :mlt) from dual;]],{mlt=my_log_text})
-        
         if runtime.armed then
         
             output("killed session "..sess_hold)
@@ -462,18 +475,14 @@ if suc_sl then
     end -- end if
 
     for snum = 1, #session_list do
-    
-       sess_hold    = session_list[snum][1]
+          
+       --
+       -- Here is what we are sending kill_session: sess_hold, user_hold, status_hold, command_hold, duration_hold
+       --    See the definition of session_list at top of script. If you wish to pass more parameters, simply 
+       --    add them to the session_list definition and then the additional code inside function kill_session.
+       --
        
-       user_hold    = session_list[snum][2]
-       
-       status_hold  = session_list[snum][3]
-       
-       command_hold = session_list[snum][4]
-       
-       duration_hold= session_list[snum][5]
-       
-       suc = kill_session(sess_hold, user_hold, status_hold, command_hold, duration_hold)
+       suc = kill_session(session_list[snum])
        
    end -- end for
    
@@ -482,4 +491,30 @@ end -- end if
 
 /
 
-execute script tc_watchdog(false, 'ALL', 300) with output;
+--[[ Testing: Does not execute, only displays runtime info and what would have been done ]]
+--execute script tc_watchdog(false, 'IDLE', 86400) with output;
+--execute script tc_watchdog(false, 'IDLE', 300) with output;
+--execute script tc_watchdog(false, 'IDLE', 10) with output;
+--execute script tc_watchdog(false, 'EXECUTE SQL', 86400) with output;
+--execute script tc_watchdog(false, 'EXECUTE SQL', 300) with output;
+--execute script tc_watchdog(false, 'EXECUTE SQL', 10) with output;
+--execute script tc_watchdog(false, 'ALL', 86400) with output;
+--execute script tc_watchdog(false, 'ALL', 300) with output;
+--execute script tc_watchdog(false, 'ALL', 10) with output;
+
+--[[ Testing: These will fail and write failure to log ]]
+--execute script tc_watchdog('Ture', 'ALL', 10) with output;
+--execute script tc_watchdog(true, 'IDEL', 10) with output;
+--execute script tc_watchdog(true, 'BOTH', 10) with output;
+--execute script tc_watchdog(true, 'ALL', 'X') with output;
+
+--[[Tesing: Will execute with no action taken - wrties to log ]]
+--execute script tc_watchdog(true, 'IDLE', 864000) with output;
+--execute script tc_watchdog(true, 'EXECUTE SQL', 864000) with output;
+--execute script tc_watchdog(true, 'ALL', 864000) with output;
+
+--[[ Actual production run to kill transaction conflicts ]]
+
+execute script tc_watchdog(false, 'IDLE', 300) with output;
+--execute script tc_watchdog(true, 'EXECUTE SQL', 10) with output;
+--execute script tc_watchdog(true, 'ALL', 10) with output;
