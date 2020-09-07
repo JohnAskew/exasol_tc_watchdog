@@ -43,6 +43,7 @@ CREATE OR REPLACE LUA SCRIPT tc_watchdog(in_armed, in_aggressive, in_wait)
 
 AS 
 
+--suc,res = pquery([[select logger('tc_watchdog', 'INFO', 'Test Message') from dual;]])
 --=====================================
 -- local variables and tables
 --=====================================
@@ -278,6 +279,12 @@ local function kill_session(sess_hold, user_hold, status_hold, command_hold, dur
         
         my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_hold..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
        
+        my_log_text = ('Script session '..my_sess..' : killed  '..sess_hold..' : reason '..reason_hold..' : user '..user_hold..' : sql_status  '..status_hold..' : sql '..command_hold..' : wait '..duration_hold)
+        
+        output(my_log_text)
+        
+        suc_log,res_log = pquery([[select tc_syslogger('tc_watchdog', 'INFO', :mlt) from dual;]],{mlt=my_log_text})
+        
         if runtime.armed then
         
             output("killed session "..sess_hold)
@@ -474,4 +481,5 @@ if suc_sl then
 end -- end if
 
 /
+
 execute script tc_watchdog(false, 'ALL', 300) with output;
