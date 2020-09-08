@@ -167,7 +167,7 @@ local inputs = {armed = false, aggressive_mode = 'IDLE', wait_time = 300}       
 --                                         --          ALL - Kill anything blocking, IDLE or EXECUTE SQL, etc.
 --
 --inputs.wait_time = 300                   -- Seconds query has been in transaction conflict state. Base on 
-                                         --          field EXA_DBA_TRANSACTION_CONFLCTS.start_time
+                                           --          field EXA_DBA_TRANSACTION_CONFLCTS.start_time
 
 inputs.whoami = function (self) output("Session Runtime INFO: "..my_sess.." ran with options -->  aggressive_mode  is  "..self.aggressive_mode.."      wait_time is  "..self.wait_time) end 
 
@@ -302,17 +302,17 @@ runtime:whoami()
 ---------------------------------------
 local function kill_session(...)
 ---------------------------------------
-       local kill_session_list = {...}
+    local kill_session_list = {...}
        
-       sess_hold    = kill_session_list[1][1]
+    sess_hold    = kill_session_list[1][1]
        
-       user_hold    = kill_session_list[1][2]
+    user_hold    = kill_session_list[1][2]
        
-       status_hold  = kill_session_list[1][3]
+    status_hold  = kill_session_list[1][3]
        
-       command_hold = kill_session_list[1][4]
+    command_hold = kill_session_list[1][4]
        
-       duration_hold= kill_session_list[1][5]
+    duration_hold= kill_session_list[1][5]
 
     if runtime.armed then
         
@@ -366,9 +366,9 @@ local function kill_session(...)
         
         output("kill_session --> killed session failed!")
             
-                my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_failed..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
+        my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_failed..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
  
-                query(my_sql_text)
+        query(my_sql_text)
     
     end -- end if
      
