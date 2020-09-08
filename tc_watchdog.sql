@@ -47,10 +47,60 @@ CREATE OR REPLACE LUA SCRIPT tc_watchdog(in_armed, in_aggressive, in_wait)
 
 AS 
 
---suc,res = pquery([[select logger('tc_watchdog', 'INFO', 'Test Message') from dual;]])
---=====================================
+--#####################################
+--# HOUSEKEEPING
+--#####################################
+
+log_schema = 'BIAA_PUBLISH'
+
+---------------------------------------
+-- Set the reporting SCHEMA
+---------------------------------------
+
+local suc_sch, res_sch = pquery([[OPEN SCHEMA ::lsch]],{lsch = log_schema})
+
+if not suc_sch then
+
+    output("Error on opening schema "..log_schema..". Aborting with no action taken")
+    
+    exit()
+    
+end
+
+---------------------------------------
+-- Create a log table if not exists
+---------------------------------------
+
+local succ_cr_tbl, res_cr_tbl = pquery([[CREATE TABLE IF NOT EXISTS tc_log(kill_date timestamp, script_session varchar(20), killed_session_id varchar(20), reason varchar(100), user_name varchar(50), status varchar(50), command varchar(50), duration varchar(50))]])
+
+if not succ_cr_tbl then
+
+    local error_txt = "Unable to allocate tc_log table to log results. Aborting"
+  
+    output("succ_cr_tbl:"..succ_cr_tbl.." Error: " ..error_txt)
+  
+    exit()
+  
+end -- end if
+
+
+--=======================================
+-- Capture runtime session_id to report
+-- if the script execution failed due
+-- to inappropriate arguments being passed 
+-- to the script.
+--=======================================
+
+local suc_sess, res_sess = pquery([[select to_char(current_session)]])
+
+if #res_sess then
+
+    my_sess = res_sess[1][1]
+    
+end
+---------------------------------------
 -- local variables and tables
---=====================================
+---------------------------------------
 my_session ='unknown'
 
 sess_hold = 0
@@ -85,24 +135,12 @@ wait_valid = false
 
 valid_aggressive = {'IDLE', 'EXECUTE SQL', 'ALL'} --Do not change me unless you know what you are doing
 
---=======================================
--- Capture runtime session_id to report
--- if the script execution failed due
--- to inappropriate arguments being passed 
--- to the script.
---=======================================
-
-local suc_sess, res_sess = pquery([[select to_char(current_session)]])
-
-if #res_sess then
-
-    my_sess = res_sess[1][1]
-    
-end
-
---=======================================
+--#######################################
+--# BEGIN VALIDATING INPUT PARAMETERS / ARGUMENTS
+--#######################################
+-----------------------------------------
 -- Defaults for inputs 
---=======================================
+-----------------------------------------
 -- (template with default parameters and arguments)
 ---Reason: Set up safe mode incase the script
 --         is run with inappropriate script arguments.
@@ -258,9 +296,9 @@ end -- end if
 
 runtime:whoami()
 
---=====================================
+--#####################################
 -- Functions
---=====================================
+--#####################################
 ---------------------------------------
 local function kill_session(...)
 ---------------------------------------
@@ -336,30 +374,15 @@ local function kill_session(...)
      
 end -- end function 
 
---=====================================
--- Create a log table if not exists
---=====================================
 
-local succ_cr_tbl, res_cr_tbl = pquery([[CREATE TABLE IF NOT EXISTS tc_log(kill_date timestamp, script_session varchar(20), killed_session_id varchar(20), reason varchar(100), user_name varchar(50), status varchar(50), command varchar(50), duration varchar(50))]])
-
-if not succ_cr_tbl then
-
-    local error_txt = "Unable to allocate tc_log table to log results. Aborting"
-  
-    output("succ_cr_tbl:"..succ_cr_tbl.." Error: " ..error_txt)
-  
-    exit()
-  
-end -- end if
-
---=====================================
--- Bring status current
---=====================================
+--#####################################
+-- MAIN LOGIC starts with bring status current
+--#####################################
 
 query([[FLUSH STATISTICS;]])
 
 --=====================================
--- Get Conflicting Transaction Sessions with IDLE/ACTIVE sessions
+-- Gat all current Conflicting Transaction Sessions with IDLE/ACTIVE sessions
 --=====================================
 
 if runtime.aggressive_mode == 'ALL' then
@@ -473,6 +496,10 @@ if suc_sl then
        end -- end if
     
     end -- end if
+    
+    --
+    -- This next statement is a loop
+    --
 
     for snum = 1, #session_list do
           
@@ -491,30 +518,4 @@ end -- end if
 
 /
 
---[[ Testing: Does not execute, only displays runtime info and what would have been done ]]
---execute script tc_watchdog(false, 'IDLE', 86400) with output;
---execute script tc_watchdog(false, 'IDLE', 300) with output;
---execute script tc_watchdog(false, 'IDLE', 10) with output;
---execute script tc_watchdog(false, 'EXECUTE SQL', 86400) with output;
---execute script tc_watchdog(false, 'EXECUTE SQL', 300) with output;
---execute script tc_watchdog(false, 'EXECUTE SQL', 10) with output;
---execute script tc_watchdog(false, 'ALL', 86400) with output;
---execute script tc_watchdog(false, 'ALL', 300) with output;
---execute script tc_watchdog(false, 'ALL', 10) with output;
-
---[[ Testing: These will fail and write failure to log ]]
---execute script tc_watchdog('Ture', 'ALL', 10) with output;
---execute script tc_watchdog(true, 'IDEL', 10) with output;
---execute script tc_watchdog(true, 'BOTH', 10) with output;
---execute script tc_watchdog(true, 'ALL', 'X') with output;
-
---[[Tesing: Will execute with no action taken - wrties to log ]]
---execute script tc_watchdog(true, 'IDLE', 864000) with output;
---execute script tc_watchdog(true, 'EXECUTE SQL', 864000) with output;
---execute script tc_watchdog(true, 'ALL', 864000) with output;
-
---[[ Actual production run to kill transaction conflicts ]]
-
 execute script tc_watchdog(false, 'IDLE', 300) with output;
---execute script tc_watchdog(true, 'EXECUTE SQL', 10) with output;
---execute script tc_watchdog(true, 'ALL', 10) with output;
