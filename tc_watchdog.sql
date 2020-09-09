@@ -39,6 +39,7 @@
 --
 -- To-Do:
 --       1. Change code to display inappropriate arguments when armed = false
+--       2. Consolidate all log inserts into calling a log insert function
 --       
 --=============================================================================
 
@@ -71,7 +72,23 @@ end
 -- Create a log table if not exists
 ---------------------------------------
 
-local succ_cr_tbl, res_cr_tbl = pquery([[CREATE TABLE IF NOT EXISTS tc_log(kill_date timestamp, script_session varchar(20), killed_session_id varchar(20), reason varchar(100), user_name varchar(50), status varchar(50), command varchar(50), duration varchar(50))]])
+local succ_cr_tbl, res_cr_tbl = pquery([[CREATE TABLE IF NOT EXISTS tc_log(kill_date timestamp
+
+                                       , script_session varchar(20)
+                                       
+                                       , killed_session_id varchar(20)
+                                       
+                                       , reason varchar(100)
+                                       
+                                       , user_name varchar(50)
+                                       
+                                       , status varchar(50)
+                                       
+                                       , command varchar(50)
+                                       
+                                       , duration varchar(50))
+                                       
+                                       ]])
 
 if not succ_cr_tbl then
 
@@ -89,6 +106,9 @@ end -- end if
 -- if the script execution failed due
 -- to inappropriate arguments being passed 
 -- to the script.
+--
+-- This variable is nice to have but is
+-- not critical to the core functionality.
 --=======================================
 
 local suc_sess, res_sess = pquery([[select to_char(current_session)]])
@@ -96,6 +116,10 @@ local suc_sess, res_sess = pquery([[select to_char(current_session)]])
 if #res_sess then
 
     my_sess = res_sess[1][1]
+    
+else
+
+    return -1
     
 end
 ---------------------------------------
@@ -117,6 +141,8 @@ session_list = {sess_hold = 0, user_hold = "", status_hold = "", command_hold = 
 
 reason_hold = 'tc_watchdog'
 
+reason_no_transaction_conflicts = 'No open transaction conflicts found meeting input criteria'
+
 reason_failed = 'tc_watchdog unable to kill session'
 
 reason_invalid_input_armed = ('Not run--> Argument {armed} invalid -- must be true or false. Read in '..tostring(in_armed))
@@ -124,8 +150,6 @@ reason_invalid_input_armed = ('Not run--> Argument {armed} invalid -- must be tr
 reason_invalid_input_aggressive = ('Not run --> Argument {aggressive_mode} invalid. Read in '..tostring(in_aggressive))
 
 reason_invalid_input_wait_time = ('Not run --> Argument {wait_time} -- must be numeric & > 0. Read in '..tostring(in_wait))
-
-reason_no_transaction_conflicts = 'No open transaction conflicts found meeting input criteria'
 
 armed_valid = false
 
@@ -233,7 +257,37 @@ if not armed_valid then
 
      sess_hold = 0
         
-      my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_invalid_input_armed..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
+      my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]
+      
+                    ..my_sess
+                    
+                    ..[[,]]
+                    
+                    ..sess_hold
+                    
+                    ..[[,']]
+                    
+                    ..reason_invalid_input_armed
+                    
+                    ..[[',']]
+                    
+                    ..user_hold
+                    
+                    ..[[',']]
+                    
+                    ..status_hold
+                    
+                    ..[[',']]
+                    
+                    ..command_hold
+                    
+                    ..[[',]]
+                    
+                    ..duration_hold
+                    
+                    ..[[)
+                    
+                    ]]
 
       suc_ks_ins, res_ks_ins = pquery(my_sql_text)
                   
@@ -253,7 +307,31 @@ if runtime.armed then
      
         sess_hold = 0
         
-        my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_invalid_input_aggressive..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
+        my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]
+                      
+                      ..my_sess
+                      
+                      ..[[,]]
+                      
+                      ..sess_hold
+                      
+                      ..[[,']]
+                      
+                      ..reason_invalid_input_aggressive
+                      
+                      ..[[',']]
+                      
+                      ..user_hold
+                      
+                      ..[[',']]..
+                      
+                      status_hold..[[',']]
+                      
+                      ..command_hold..[[',]]
+                      
+                      ..duration_hold..[[)
+                      
+                      ]]
 
          suc_ks_ins, res_ks_ins = pquery(my_sql_text)
                   
@@ -271,7 +349,37 @@ if runtime.armed then
        
           sess_hold = 0
        
-           my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_invalid_input_wait_time..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
+           my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]
+           
+                         ..my_sess
+                         
+                         ..[[,]]
+                         
+                         ..sess_hold
+                         
+                         ..[[,']]
+                         
+                         ..reason_invalid_input_wait_time
+                         
+                         ..[[',']]
+                         
+                         ..user_hold
+                         
+                         ..[[',']]
+                         
+                         ..status_hold
+                         
+                         ..[[',']]
+                         
+                         ..command_hold
+                         
+                         ..[[',]]
+                         
+                         ..duration_hold
+                         
+                         ..[[)
+                         
+                         ]]
 
            suc_ks_ins, res_ks_ins = pquery(my_sql_text)
            
@@ -299,6 +407,7 @@ runtime:whoami()
 --#####################################
 -- Functions
 --#####################################
+
 ---------------------------------------
 local function kill_session(...)
 ---------------------------------------
@@ -320,10 +429,35 @@ local function kill_session(...)
             
         query([[commit;]])
         
-        my_log_text = ('Script session '..my_sess..' : killed  '..sess_hold..' : reason '..reason_hold..' : user '..user_hold..' : sql_status  '..status_hold..' : sql '..command_hold..' : wait '..duration_hold)
+        my_log_text = ('Script session '
+        
+                       ..my_sess
+                       
+                       ..' : killed  '
+                       
+                       ..sess_hold
+                       
+                       ..' : reason '
+                       
+                       ..reason_hold
+                       
+                       ..' : user '
+                       
+                       ..user_hold
+                       
+                       ..' : sql_status  '
+                       
+                       ..status_hold..' : sql '
+                       
+                       ..command_hold
+                       
+                       ..' : wait '
+                       
+                       ..duration_hold)
         
         suc_log,res_log = pquery([[select tc_syslogger('tc_watchdog', 'INFO', :mlt) from dual;]],{mlt=my_log_text})
-            
+        
+           
     else
         
         suc1_ks, res1_ks = pquery([[select 'kill session ']])
@@ -334,7 +468,23 @@ local function kill_session(...)
         
     if suc1_ks then
         
-        my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_hold..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
+        my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]
+                      
+                      ..my_sess..[[,]]
+                      
+                      ..sess_hold..[[,']]
+                      
+                      ..reason_hold..[[',']]
+                      
+                      ..user_hold..[[',']]
+                      
+                      ..status_hold..[[',']]
+                      
+                      ..command_hold..[[',]]
+                      
+                      ..duration_hold..[[)
+                      
+                      ]]
        
         if runtime.armed then
         
@@ -366,7 +516,23 @@ local function kill_session(...)
         
         output("kill_session --> killed session failed!")
             
-        my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_failed..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
+        my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]
+                     
+                      ..my_sess..[[,]]
+                      
+                      ..sess_hold..[[,']]
+                      
+                      ..reason_failed..[[',']]
+                      
+                      ..user_hold..[[',']]
+                      
+                      ..status_hold..[[',']]
+                      
+                      ..command_hold..[[',]]
+                      
+                      ..duration_hold..[[)
+                      
+                      ]]
  
         query(my_sql_text)
     
@@ -483,13 +649,55 @@ if suc_sl then
       
       if runtime.aggressive_mode == 'ALL' then
       
-           my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_no_transaction_conflicts..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
+           my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]
+                         
+                         ..my_sess..[[,]]
+                         
+                         ..sess_hold..[[,']]
+                         
+                         ..reason_no_transaction_conflicts..[[',']]
+                         
+                         ..user_hold..[[',']]
+                         
+                         ..status_hold..[[',']]
+                         
+                         ..command_hold..[[',]]
+                         
+                         ..duration_hold..[[)
+                         
+                         ]]
 
            suc_ks_ins, res_ks_ins = pquery(my_sql_text)
       
       else
       
-           my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]..my_sess..[[,]]..sess_hold..[[,']]..reason_no_transaction_conflicts..[[',']]..user_hold..[[',']]..status_hold..[[',']]..command_hold..[[',]]..duration_hold..[[)]]
+           my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]
+                         
+                         ..my_sess..[[,]]
+                         
+                         ..sess_hold..[[,']]
+                         
+                         ..reason_no_transaction_conflicts
+                         
+                         ..[[',']]
+                         
+                         ..user_hold
+                         
+                         ..[[',']]
+                         
+                         ..status_hold
+                         
+                         ..[[',']]
+                         
+                         ..command_hold
+                         
+                         ..[[',]]
+                         
+                         ..duration_hold
+                         
+                         ..[[)
+                         
+                         ]]
 
            suc_ks_ins, res_ks_ins = pquery(my_sql_text)
            
@@ -518,4 +726,4 @@ end -- end if
 
 /
 
-execute script tc_watchdog(false, 'IDLE', 300) with output;
+execute script tc_watchdog(false, 'ALL', 300) with output;
