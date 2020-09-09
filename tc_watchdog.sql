@@ -100,6 +100,26 @@ if not succ_cr_tbl then
   
 end -- end if
 
+--=====================================
+local function get_date() 
+--=====================================
+
+    local suc_date, res_date = pquery([[select current_timestamp]])
+    
+    if suc_date then
+    
+        local return_date = "'"..res_date[1][1].."'"
+        
+        return return_date
+        
+    else
+    
+        return -1
+        
+    end -- end if
+    
+end -- end function
+
 
 --=======================================
 -- Capture runtime session_id to report
@@ -256,8 +276,14 @@ end -- end -if
 if not armed_valid then
 
      sess_hold = 0
-        
-      my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]
+     
+     local hold_date = get_date()
+     
+     my_sql_text = [[INSERT INTO tc_log values (]]
+                   
+                   ..hold_date
+                   
+                   ..[[,]]
       
                     ..my_sess
                     
@@ -288,7 +314,7 @@ if not armed_valid then
                     ..[[)
                     
                     ]]
-
+                    
       suc_ks_ins, res_ks_ins = pquery(my_sql_text)
                   
        if not suc_ks_ins then
@@ -307,7 +333,13 @@ if runtime.armed then
      
         sess_hold = 0
         
-        my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]
+        local hold_date = get_date()
+     
+        my_sql_text = [[INSERT INTO tc_log values (]]
+                    
+                       ..hold_date
+                       
+                       ..[[,]]
                       
                       ..my_sess
                       
@@ -349,8 +381,14 @@ if runtime.armed then
        
           sess_hold = 0
        
-           my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]
-           
+          local hold_date = get_date()
+     
+          my_sql_text = [[INSERT INTO tc_log values (]]
+                   
+                         ..hold_date
+                   
+                         ..[[,]]         
+                           
                          ..my_sess
                          
                          ..[[,]]
@@ -404,13 +442,9 @@ end -- end if
 
 runtime:whoami()
 
---#####################################
--- Functions
---#####################################
-
----------------------------------------
+--=====================================
 local function kill_session(...)
----------------------------------------
+--=====================================
     local kill_session_list = {...}
        
     sess_hold    = kill_session_list[1][1]
@@ -468,8 +502,14 @@ local function kill_session(...)
         
     if suc1_ks then
         
-        my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]
-                      
+        local hold_date = get_date()
+     
+         my_sql_text = [[INSERT INTO tc_log values (]]
+                   
+                      ..hold_date
+                   
+                      ..[[,]] 
+                                           
                       ..my_sess..[[,]]
                       
                       ..sess_hold..[[,']]
@@ -516,8 +556,14 @@ local function kill_session(...)
         
         output("kill_session --> killed session failed!")
             
-        my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]
-                     
+        local hold_date = get_date()
+     
+        my_sql_text = [[INSERT INTO tc_log values (]]
+                   
+                      ..hold_date
+                   
+                      ..[[,]]   
+                                        
                       ..my_sess..[[,]]
                       
                       ..sess_hold..[[,']]
@@ -547,9 +593,9 @@ end -- end function
 
 query([[FLUSH STATISTICS;]])
 
---=====================================
--- Gat all current Conflicting Transaction Sessions with IDLE/ACTIVE sessions
---=====================================
+--
+-- Gat all current Conflicting Transactions with IDLE/ACTIVE sessions
+--
 
 if runtime.aggressive_mode == 'ALL' then
 
@@ -649,8 +695,14 @@ if suc_sl then
       
       if runtime.aggressive_mode == 'ALL' then
       
-           my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]
-                         
+          local hold_date = get_date()
+     
+          my_sql_text = [[INSERT INTO tc_log values (]]
+                   
+                        ..hold_date
+                   
+                         ..[[,]] 
+                                                 
                          ..my_sess..[[,]]
                          
                          ..sess_hold..[[,']]
@@ -671,33 +723,39 @@ if suc_sl then
       
       else
       
-           my_sql_text = [[INSERT INTO tc_log values ((select current_timestamp),]]
+          hold_date = get_date()
+     
+          my_sql_text = [[INSERT INTO tc_log values (]]
+                   
+                        ..hold_date
+                   
+                        ..[[,]]  
+                                               
+                        ..my_sess..[[,]]
                          
-                         ..my_sess..[[,]]
+                        ..sess_hold..[[,']]
                          
-                         ..sess_hold..[[,']]
+                        ..reason_no_transaction_conflicts
                          
-                         ..reason_no_transaction_conflicts
+                        ..[[',']]
                          
-                         ..[[',']]
+                        ..user_hold
                          
-                         ..user_hold
+                        ..[[',']]
                          
-                         ..[[',']]
+                        ..status_hold
                          
-                         ..status_hold
+                        ..[[',']]
                          
-                         ..[[',']]
+                        ..command_hold
                          
-                         ..command_hold
+                        ..[[',]]
                          
-                         ..[[',]]
+                        ..duration_hold
                          
-                         ..duration_hold
+                        ..[[)
                          
-                         ..[[)
-                         
-                         ]]
+                        ]]
 
            suc_ks_ins, res_ks_ins = pquery(my_sql_text)
            
@@ -726,4 +784,30 @@ end -- end if
 
 /
 
-execute script tc_watchdog(false, 'ALL', 300) with output;
+--[[ Testing: Does not execute, only displays runtime info and what would have been done ]]
+--execute script tc_watchdog(false, 'IDLE', 86400) with output;
+--execute script tc_watchdog(false, 'IDLE', 300) with output;
+--execute script tc_watchdog(false, 'IDLE', 10) with output;
+--execute script tc_watchdog(false, 'EXECUTE SQL', 86400) with output;
+--execute script tc_watchdog(false, 'EXECUTE SQL', 300) with output;
+--execute script tc_watchdog(false, 'EXECUTE SQL', 10) with output;
+--execute script tc_watchdog(false, 'ALL', 86400) with output;
+--execute script tc_watchdog(false, 'ALL', 300) with output;
+--execute script tc_watchdog(false, 'ALL', 10) with output;
+
+--[[ Testing: These will fail and write failure to log 
+--   You should see 4 failure entries in the log ]]
+--execute script tc_watchdog('Ture', 'ALL', 10) with output;
+--execute script tc_watchdog(true, 'IDEL', 10) with output;
+--execute script tc_watchdog(true, 'BOTH', 10) with output;
+--execute script tc_watchdog(true, 'ALL', 'X') with output;
+
+--[[Tesing: Will execute with no action taken - wrties to log 
+--  You should see 3 entries in the log ]]
+--execute script tc_watchdog(true, 'IDLE', 864000) with output;
+--execute script tc_watchdog(true, 'EXECUTE SQL', 864000) with output;
+--execute script tc_watchdog(true, 'ALL', 864000) with output;
+
+--[[ Actual production run to kill transaction conflicts ]]
+
+execute script tc_watchdog(false, 'EXECUTE SQL', 300) with output;
