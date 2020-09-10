@@ -796,30 +796,4 @@ end -- end if
 
 /
 
---[[ Testing: Does not execute, only displays runtime info and what would have been done ]]
---execute script tc_watchdog(false, 'IDLE', 86400) with output;
---execute script tc_watchdog(false, 'IDLE', 300) with output;
---execute script tc_watchdog(false, 'IDLE', 10) with output;
---execute script tc_watchdog(false, 'EXECUTE SQL', 86400) with output;
---execute script tc_watchdog(false, 'EXECUTE SQL', 300) with output;
---execute script tc_watchdog(false, 'EXECUTE SQL', 10) with output;
---execute script tc_watchdog(false, 'ALL', 86400) with output;
---execute script tc_watchdog(false, 'ALL', 300) with output;
---execute script tc_watchdog(false, 'ALL', 10) with output;
-
---[[ Testing: These will fail and write failure to log 
---   You should see 4 failure entries in the log ]]
---execute script tc_watchdog('Ture', 'ALL', 10) with output;
---execute script tc_watchdog(true, 'IDEL', 10) with output;
---execute script tc_watchdog(true, 'BOTH', 10) with output;
---execute script tc_watchdog(true, 'ALL', 'X') with output;
-
---[[Tesing: Will execute with no action taken - writes to log 
---  You should see 3 entries in the log ]]
---execute script tc_watchdog(true, 'IDLE', 864000) with output;
---execute script tc_watchdog(true, 'EXECUTE SQL', 864000) with output;
---execute script tc_watchdog(true, 'ALL', 864000) with output;
-
---[[ Actual production run to kill transaction conflicts ]]
-
-execute script tc_watchdog(false, 'BOTH', 300) with output;
+execute script tc_watchdog(false, 'ALL', 300) with output;
