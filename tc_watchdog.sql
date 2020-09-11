@@ -38,8 +38,7 @@
 --       Running with aggressive_mode = 'ALL' will kill any blocking session.
 --
 -- To-Do:
---       1. Change code to display inappropriate arguments when armed = false
---       2. Consolidate all log inserts into calling a log insert function
+--       1. Consolidate all log inserts into calling a log insert function
 --       
 --=============================================================================
 
@@ -62,7 +61,7 @@ local suc_sch, res_sch = pquery([[OPEN SCHEMA ::lsch]],{lsch = log_schema})
 
 if not suc_sch then
 
-    output("Error on opening schema "..log_schema..". Aborting with no action taken")
+    error("Error on opening schema "..log_schema..". Aborting with no action taken")
     
     exit()
     
@@ -94,7 +93,7 @@ if not succ_cr_tbl then
 
     local error_txt = "Unable to allocate tc_log table to log results. Aborting"
   
-    output("succ_cr_tbl:"..succ_cr_tbl.." Error: " ..error_txt)
+    error("succ_cr_tbl:"..succ_cr_tbl.." Error: " ..error_txt)
   
     exit()
   
@@ -179,6 +178,76 @@ wait_valid = false
 
 valid_aggressive = {'IDLE', 'EXECUTE SQL', 'ALL'} --Do not change me unless you know what you are doing
 
+--=====================================
+function log_insert(...)
+--=====================================
+
+    log_insert_list = {...}
+    
+    local hold_date     = get_date()
+    
+    local log_insert_type  = log_insert_list[1][1]
+    
+    local my_sess       = log_insert_list[1][2]
+    
+    local sess_hold     = log_insert_list[1][3]
+    
+    local reason_hold   = log_insert_list[1][4]
+    
+    local user_hold     = log_insert_list[1][5]
+    
+    local status_hold   = log_insert_list[1][6]
+    
+    local command_hold  = log_insert_list[1][7]
+    
+    local duration_hold = log_insert_list[1][8]
+    
+    --DEBUG output("log_insert --> log_insert_type: "..log_insert_type.." hold_date: "..hold_date.." my_sess"..my_sess.." sess_hold: "..sess_hold.." reason_hold: "..reason_hold.." user_hold: "..user_hold.." status_hold: "..status_hold.." command_hold: "..command_hold.." duration_hold: "..duration_hold)
+    
+         my_sql_text = [[INSERT INTO tc_log values (]]
+                   
+                   ..hold_date
+                   
+                   ..[[,]]
+      
+                    ..my_sess
+                    
+                    ..[[,]]
+                    
+                    ..sess_hold
+                    
+                    ..[[,']]
+                    
+                    ..reason_hold
+                    
+                    ..[[',']]
+                    
+                    ..user_hold
+                    
+                    ..[[',']]
+                    
+                    ..status_hold
+                    
+                    ..[[',']]
+                    
+                    ..command_hold
+                    
+                    ..[[',]]
+                    
+                    ..duration_hold
+                    
+                    ..[[)
+                    
+                    ]]
+                    
+      suc_li, res_li = pquery(my_sql_text)
+                  
+       if not suc_li then
+                  
+           output("Kill_session failed to insert log for invalid value for "..log_type)
+                      
+       end -- end if
+end
 
 
 --#######################################
@@ -279,53 +348,15 @@ if not armed_valid then
 
      sess_hold = 0
      
-     local hold_date = get_date()
+     log_type = 'armed'
+         
+     reason_hold = reason_invalid_input_armed
      
-     my_sql_text = [[INSERT INTO tc_log values (]]
-                   
-                   ..hold_date
-                   
-                   ..[[,]]
-      
-                    ..my_sess
-                    
-                    ..[[,]]
-                    
-                    ..sess_hold
-                    
-                    ..[[,']]
-                    
-                    ..reason_invalid_input_armed
-                    
-                    ..[[',']]
-                    
-                    ..user_hold
-                    
-                    ..[[',']]
-                    
-                    ..status_hold
-                    
-                    ..[[',']]
-                    
-                    ..command_hold
-                    
-                    ..[[',]]
-                    
-                    ..duration_hold
-                    
-                    ..[[)
-                    
-                    ]]
-                    
-      suc_ks_ins, res_ks_ins = pquery(my_sql_text)
-                  
-       if not suc_ks_ins then
-                  
-           output("Kill_session failed to insert log for invalid value for armed")
-                      
-       end -- end if
-                  
-       error([[Would ]]..reason_invalid_input_armed)
+     log_list = {log_type, my_sess, sess_hold, reason_hold , user_hold , status_hold, command_hold, duration_hold}
+     
+     log_insert(log_list)
+     
+     error([[Would ]]..reason_invalid_input_armed)
     
 end
     
@@ -335,51 +366,14 @@ if not aggressive_valid then
         
     if runtime.armed then
         
-        local hold_date = get_date()
+        log_type = 'aggressive'
+         
+        reason_hold = reason_invalid_input_aggressive
      
-        my_sql_text = [[INSERT INTO tc_log values (]]
-                    
-                      ..hold_date
-                       
-                      ..[[,]]
-                      
-                      ..my_sess
-                      
-                      ..[[,]]
-                      
-                      ..sess_hold
-                      
-                      ..[[,']]
-                      
-                      ..reason_invalid_input_aggressive
-                      
-                      ..[[',']]
-                      
-                      ..user_hold
-                      
-                      ..[[',']]
-                      
-                      ..status_hold
-                         
-                      ..[[',']]
-                      
-                      ..command_hold
-                         
-                      ..[[',]]
-                      
-                      ..duration_hold
-                         
-                      ..[[)]]
-
-  
-         suc_ks_ins, res_ks_ins = pquery(my_sql_text)
-                  
-         if not suc_ks_ins then
-                  
-             output("Kill_session failed to insert log for invalid aggressive")
-                      
-         end -- end if
-             
+        log_list = {log_type, my_sess, sess_hold, reason_hold , user_hold , status_hold, command_hold, duration_hold}
+     
+        log_insert(log_list)
+     
      end -- end if
                   
      error([[Would ]]..reason_invalid_input_aggressive)
@@ -390,53 +384,13 @@ if ( not wait_valid ) then -- or not wait_valid ) then
 
     if runtime.armed then
        
-        sess_hold = 0
-       
-        local hold_date = get_date()
+        log_type = 'wait_time'
+         
+        reason_hold = reason_invalid_input_wait_time
      
-        my_sql_text = [[INSERT INTO tc_log values (]]
-                   
-                      ..hold_date
-                   
-                      ..[[,]]         
-                           
-                      ..my_sess
-                         
-                      ..[[,]]
-                         
-                      ..sess_hold
-                         
-                      ..[[,']]
-                         
-                      ..reason_invalid_input_wait_time
-                         
-                      ..[[',']]
-                         
-                      ..user_hold
-                         
-                      ..[[',']]
-                         
-                      ..status_hold
-                         
-                      ..[[',']]
-                         
-                      ..command_hold
-                         
-                      ..[[',]]
-                         
-                      ..duration_hold
-                         
-                      ..[[)
-                         
-                      ]]
-
-           suc_ks_ins, res_ks_ins = pquery(my_sql_text)
-           
-           if not suc_ks_ins then
-                  
-               output("Kill_session failed to insert log for invalid wait_time")
-                      
-           end -- end if
+        log_list = {log_type, my_sess, sess_hold, reason_hold , user_hold , status_hold, command_hold, duration_hold}
+     
+        log_insert(log_list)
       
       end -- end if
                   
@@ -502,8 +456,7 @@ local function kill_session(...)
                        ..duration_hold)
         
         suc_log,res_log = pquery([[select tc_syslogger('tc_watchdog', 'INFO', :mlt) from dual;]],{mlt=my_log_text})
-        
-           
+                
     else
         
         suc1_ks, res1_ks = pquery([[select 'kill session ']])
@@ -512,90 +465,20 @@ local function kill_session(...)
             
     end -- end if
         
-    if suc1_ks then
+    if (suc1_ks and runtime.armed) then
         
-        local hold_date = get_date()
+        log_list = {log_type, my_sess, sess_hold, reason_hold , user_hold , status_hold, command_hold, duration_hold}
      
-         my_sql_text = [[INSERT INTO tc_log values (]]
-                   
-                      ..hold_date
-                   
-                      ..[[,]] 
-                                           
-                      ..my_sess..[[,]]
-                      
-                      ..sess_hold..[[,']]
-                      
-                      ..reason_hold..[[',']]
-                      
-                      ..user_hold..[[',']]
-                      
-                      ..status_hold..[[',']]
-                      
-                      ..command_hold..[[',]]
-                      
-                      ..duration_hold..[[)
-                      
-                      ]]
+        log_insert(log_list)
+        
+    end --end if
        
-        if runtime.armed then
+    if runtime.armed then
         
-            output("killed session "..sess_hold)
-                  
-            suc_ks_ins, res_ks_ins = pquery(my_sql_text)
-                
-            if suc_ks_ins then
-            
-                output("Log table tc_log received this entry:"..my_sql_text)
-                    
-                query([[commit;]])
-                
-            else
-             
-                output("Error on logging the kill session to the table tc_log")
-                    
-                query([[rollback;]])
-                
-            end -- end if
-            
-        else
+        output("killed session "..sess_hold)
         
-             output("Would have logged "..my_sql_text)
-                 
-        end  -- end if
+    end  -- end if
         
-    else
-        
-        output("kill_session --> killed session failed!")
-            
-        local hold_date = get_date()
-     
-        my_sql_text = [[INSERT INTO tc_log values (]]
-                   
-                      ..hold_date
-                   
-                      ..[[,]]   
-                                        
-                      ..my_sess..[[,]]
-                      
-                      ..sess_hold..[[,']]
-                      
-                      ..reason_failed..[[',']]
-                      
-                      ..user_hold..[[',']]
-                      
-                      ..status_hold..[[',']]
-                      
-                      ..command_hold..[[',]]
-                      
-                      ..duration_hold..[[)
-                      
-                      ]]
- 
-        query(my_sql_text)
-    
-    end -- end if
-     
 end -- end function 
 
 
@@ -699,79 +582,29 @@ end -- end if
 	  
 if suc_sl then
 
-    if (#session_list == 0 and runtime.armed ) then
+    if (#session_list == 0 and not runtime.armed) then
     
-      sess_hold = 0
+        sess_hold = 0
       
-      reason_no_transaction_conflicts = (reason_no_transaction_conflicts.." --> "..runtime.aggressive_mode.." : "..runtime.wait_time)
-      
-      if runtime.aggressive_mode == 'ALL' then
-      
-          local hold_date = get_date()
-     
-          my_sql_text = [[INSERT INTO tc_log values (]]
-                   
-                        ..hold_date
-                   
-                         ..[[,]] 
-                                                 
-                         ..my_sess..[[,]]
-                         
-                         ..sess_hold..[[,']]
-                         
-                         ..reason_no_transaction_conflicts..[[',']]
-                         
-                         ..user_hold..[[',']]
-                         
-                         ..status_hold..[[',']]
-                         
-                         ..command_hold..[[',]]
-                         
-                         ..duration_hold..[[)
-                         
-                         ]]
+        reason_no_transaction_conflicts = (reason_no_transaction_conflicts.." --> "..runtime.aggressive_mode.." : "..runtime.wait_time)
+    
+        error(reason_no_transaction_conflicts)
+        
+    end -- end if
 
-           suc_ks_ins, res_ks_ins = pquery(my_sql_text)
+    if (#session_list == 0 and runtime.armed) then
+    
+        sess_hold = 0
       
-      else
-      
-          hold_date = get_date()
+        reason_no_transaction_conflicts = (reason_no_transaction_conflicts.." --> "..runtime.aggressive_mode.." : "..runtime.wait_time)
+ 
+        reason_hold = reason_no_transaction_conflicts
+    
+        log_list = {log_type, my_sess, sess_hold, reason_hold , user_hold , status_hold, command_hold, duration_hold}
      
-          my_sql_text = [[INSERT INTO tc_log values (]]
-                   
-                        ..hold_date
-                   
-                        ..[[,]]  
-                                               
-                        ..my_sess..[[,]]
-                         
-                        ..sess_hold..[[,']]
-                         
-                        ..reason_no_transaction_conflicts
-                         
-                        ..[[',']]
-                         
-                        ..user_hold
-                         
-                        ..[[',']]
-                         
-                        ..status_hold
-                         
-                        ..[[',']]
-                         
-                        ..command_hold
-                         
-                        ..[[',]]
-                         
-                        ..duration_hold
-                         
-                        ..[[)
-                         
-                        ]]
-
-           suc_ks_ins, res_ks_ins = pquery(my_sql_text)
+        log_insert(log_list)
            
-       end -- end if
+        error (reason_no_transaction_conflicts)
     
     end -- end if
     
@@ -796,4 +629,30 @@ end -- end if
 
 /
 
-execute script tc_watchdog(false, 'ALL', 300) with output;
+--[[ Testing: Does not execute, only displays runtime info and what would have been done ]]
+execute script tc_watchdog(false, 'IDLE', 86400) with output;
+--execute script tc_watchdog(false, 'IDLE', 300) with output;
+--execute script tc_watchdog(false, 'IDLE', 10) with output;
+--execute script tc_watchdog(false, 'EXECUTE SQL', 86400) with output;
+--execute script tc_watchdog(false, 'EXECUTE SQL', 300) with output;
+--execute script tc_watchdog(false, 'EXECUTE SQL', 10) with output;
+--execute script tc_watchdog(false, 'ALL', 86400) with output;
+--execute script tc_watchdog(false, 'ALL', 300) with output;
+--execute script tc_watchdog(false, 'ALL', 10) with output;
+
+--[[ Testing: These will fail and write failure to log 
+--   You should see 4 failure entries in the log ]]
+--execute script tc_watchdog('Ture', 'ALL', 10) with output;
+--execute script tc_watchdog(true, 'IDEL', 10) with output;
+--execute script tc_watchdog(true, 'BOTH', 10) with output;
+--execute script tc_watchdog(true, 'ALL', 'X') with output;
+
+--[[Tesing: Will execute with no action taken - writes to log 
+--  You should see 3 entries in the log ]]
+--execute script tc_watchdog(true, 'IDLE', 864000) with output;
+--execute script tc_watchdog(true, 'EXECUTE SQL', 864000) with output;
+--execute script tc_watchdog(true, 'ALL', 864000) with output;
+
+--[[ Actual production run to kill transaction conflicts ]]
+
+--execute script tc_watchdog(true, 'IDLE', 300) with output;
