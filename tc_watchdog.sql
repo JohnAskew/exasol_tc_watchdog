@@ -56,19 +56,21 @@ log_schema = 'BIAA_PUBLISH'
 ---------------------------------------
 -- Set the reporting SCHEMA
 ---------------------------------------
+assert(pquery([[OPEN SCHEMA ::lsch]]
 
-local suc_sch, res_sch = pquery([[OPEN SCHEMA ::lsch]],{lsch = log_schema})
-
-if not suc_sch then
-
-    error("Error on opening schema "..log_schema..". Aborting with no action taken")
+       ,{lsch = log_schema})
+                                       
+       , "Error on opening schema "
+                                       
+       ..log_schema
+                                       
+       ..". Aborting with no action taken"
+                                       
+       )
     
-    exit()
-    
-end
-
 ---------------------------------------
--- Create a log table if not exists
+-- Create a log table if not exists. 
+-- Avoiding assert to make improve readability.
 ---------------------------------------
 
 local succ_cr_tbl, res_cr_tbl = pquery([[CREATE TABLE IF NOT EXISTS tc_log(kill_date timestamp
@@ -89,16 +91,8 @@ local succ_cr_tbl, res_cr_tbl = pquery([[CREATE TABLE IF NOT EXISTS tc_log(kill_
                                        
                                        ]])
 
-if not succ_cr_tbl then
-
-    local error_txt = "Unable to allocate tc_log table to log results. Aborting"
+assert(succ_cr_tbl, "Unable to allocate tc_log table to log results. Aborting")
   
-    error("succ_cr_tbl:"..succ_cr_tbl.." Error: " ..error_txt)
-  
-    exit()
-  
-end -- end if
-
 --=====================================
 local function get_date() 
 --=====================================
@@ -164,7 +158,7 @@ reason_no_transaction_conflicts = 'No open transaction conflicts found meeting i
 
 reason_failed = 'tc_watchdog unable to kill session'
 
-reason_invalid_input_armed = ('Not run--> Argument {armed} invalid. Read in '..tostring(in_armed)..[[. Values must be TRUE or FALSE.]])
+reason_invalid_input_armed = ('Not run --> Argument {armed} invalid. Read in '..tostring(in_armed)..[[. Values must be TRUE or FALSE.]])
 
 reason_invalid_input_aggressive = ('Not run --> Argument {aggressive_mode} invalid. Read in '..tostring(in_aggressive)..[[. Values must be IDLE, EXECUTE SQL, or ALL.]] )
 
@@ -202,49 +196,47 @@ function log_insert(...)
     
     local duration_hold = log_insert_list[1][8]
     
-    --DEBUG output("log_insert --> log_insert_type: "..log_insert_type.." hold_date: "..hold_date.." my_sess"..my_sess.." sess_hold: "..sess_hold.." reason_hold: "..reason_hold.." user_hold: "..user_hold.." status_hold: "..status_hold.." command_hold: "..command_hold.." duration_hold: "..duration_hold)
-    
-         my_sql_text = [[INSERT INTO tc_log values (]]
+    my_sql_text = [[INSERT INTO tc_log values (]]
                    
-                   ..hold_date
+                  ..hold_date
                    
-                   ..[[,]]
+                  ..[[,]]
       
-                    ..my_sess
+                   ..my_sess
                     
-                    ..[[,]]
+                   ..[[,]]
                     
-                    ..sess_hold
+                   ..sess_hold
                     
-                    ..[[,']]
+                   ..[[,']]
                     
-                    ..reason_hold
+                   ..reason_hold
                     
-                    ..[[',']]
+                   ..[[',']]
                     
-                    ..user_hold
+                   ..user_hold
                     
-                    ..[[',']]
+                   ..[[',']]
                     
-                    ..status_hold
+                   ..status_hold
                     
-                    ..[[',']]
+                   ..[[',']]
                     
-                    ..command_hold
+                   ..command_hold
                     
-                    ..[[',]]
+                   ..[[',]]
                     
-                    ..duration_hold
+                   ..duration_hold
                     
-                    ..[[)
+                   ..[[)
                     
-                    ]]
+                   ]]
                     
       suc_li, res_li = pquery(my_sql_text)
                   
        if not suc_li then
                   
-           output("Kill_session failed to insert log for invalid value for "..log_type)
+           output("Kill_session "..sess_hold.." failed to insert log for invalid value for "..log_type)
                       
        end -- end if
 end
@@ -284,7 +276,19 @@ local inputs = {armed = false, aggressive_mode = 'IDLE', wait_time = 300}       
 --inputs.wait_time = 300                   -- Seconds query has been in transaction conflict state. Base on 
                                            --          field EXA_DBA_TRANSACTION_CONFLCTS.start_time
 
-inputs.whoami = function (self) output("Session Runtime INFO: "..my_sess.." ran with options -->  aggressive_mode  is  "..self.aggressive_mode.."      wait_time is  "..self.wait_time) end 
+inputs.whoami = function (self) output("Session Runtime INFO: "
+                                       
+                                       ..my_sess
+                                        
+                                       .." ran with options -->  aggressive_mode  is  "
+                                       
+                                       ..self.aggressive_mode
+                                       
+                                       .."      wait_time is  "
+                                       
+                                       ..self.wait_time)
+                                       
+                end 
 
 --=======================================
 -- Input valiation: Build input validation object
@@ -425,7 +429,9 @@ local function kill_session(...)
 
     if runtime.armed then
         
-        suc1_ks, res1_ks = pquery([[kill session ]]..sess_hold)
+        suc2_ks, res2_ks = pquery([[kill session ]]..sess_hold)
+        
+        assert(suc2_ks, "Function kill_session: Armed mode but failed to kill session "..sess_hold.." Aborting now!")
             
         query([[commit;]])
         
@@ -459,22 +465,18 @@ local function kill_session(...)
                 
     else
         
-        suc1_ks, res1_ks = pquery([[select 'kill session ']])
+        suc2_ks, res2_ks = pquery([[select 'kill session ']])
         
         output("Would have killed session "..sess_hold)
             
     end -- end if
         
-    if (suc1_ks and runtime.armed) then
+    if (suc2_ks and runtime.armed) then
         
         log_list = {log_type, my_sess, sess_hold, reason_hold , user_hold , status_hold, command_hold, duration_hold}
      
         log_insert(log_list)
-        
-    end --end if
-       
-    if runtime.armed then
-        
+
         output("killed session "..sess_hold)
         
     end  -- end if
@@ -579,6 +581,19 @@ else
 	  ]],{am = runtime.aggressive_mode, wt = runtime.wait_time})
 	 
 end -- end if
+
+assert(suc_sl, "Section Main Logic--> Running Aggressive mode "
+
+       ..runtime.aggressive_mode
+       
+       ..". Query to extract Trans Conflicts failed. Aborting now!"
+       
+       )
+
+--
+-- Technically, we don't need the next if statement, but leaving in
+-- in case someone removes the previous assert statement to catch suc_s1 = false.
+--
 	  
 if suc_sl then
 
@@ -586,7 +601,17 @@ if suc_sl then
     
         sess_hold = 0
       
-        reason_no_transaction_conflicts = (reason_no_transaction_conflicts.." --> "..runtime.aggressive_mode.." : "..runtime.wait_time)
+        reason_no_transaction_conflicts = (reason_no_transaction_conflicts
+        
+                                           .." --> "
+                                           
+                                           ..runtime.aggressive_mode
+                                           
+                                           .." : "
+                                           
+                                           ..runtime.wait_time
+                                           
+                                          )
     
         error(reason_no_transaction_conflicts)
         
@@ -596,7 +621,16 @@ if suc_sl then
     
         sess_hold = 0
       
-        reason_no_transaction_conflicts = (reason_no_transaction_conflicts.." --> "..runtime.aggressive_mode.." : "..runtime.wait_time)
+        reason_no_transaction_conflicts = (reason_no_transaction_conflicts
+                                           
+                                           .." --> "
+                                           
+                                           ..runtime.aggressive_mode
+                                           
+                                           .." : "
+                                           
+                                           ..runtime.wait_time
+                                          )
  
         reason_hold = reason_no_transaction_conflicts
     
@@ -615,12 +649,23 @@ if suc_sl then
     for snum = 1, #session_list do
           
        --
-       -- Here is what we are sending kill_session: sess_hold, user_hold, status_hold, command_hold, duration_hold
-       --    See the definition of session_list at top of script. If you wish to pass more parameters, simply 
-       --    add them to the session_list definition and then the additional code inside function kill_session.
+       -- Here is what we are sending kill_session: sess_hold, user_hold, status_hold, 
+       --    command_hold, duration_hold. 
+       -- See the definition of session_list at top of script. 
+       --    If you wish to pass more parameters, simply 
+       --    add them to the session_list definition and then the additional code 
+       --    inside function kill_session.
        --
        
-       suc = kill_session(session_list[snum])
+       local suc_ks, res_ks = pcall (kill_session, session_list[snum])
+       
+       assert(suc_ks, "Script error on line: local suc_ks, res_ks = pcall (kill_session, session_list[snum])-->Unable to kill and log session "
+             
+             ..session_list[snum][1]
+             
+             ..". Aborting now."
+            
+             )
        
    end -- end for
    
@@ -629,8 +674,14 @@ end -- end if
 
 /
 
---[[ Testing: Does not execute, only displays runtime info and what would have been done ]]
-execute script tc_watchdog(false, 'IDLE', 86400) with output;
+--[[ Testing: Does not execute, only displays runtime info and what would have been killed.
+--            It will generate an error if no transaction conflict is found meeting
+--            the criteria (arguments) specified. ]]
+--
+--execute script tc_watchdog(false, 'IDEL', 86400) with output;
+--execute script tc_watchdog(false, 'IDLE', 'apple') with output;
+--execute script tc_watchdog(false, 'ALL', '10') with output;
+--execute script tc_watchdog(false, 'IDLE', 86400) with output;
 --execute script tc_watchdog(false, 'IDLE', 300) with output;
 --execute script tc_watchdog(false, 'IDLE', 10) with output;
 --execute script tc_watchdog(false, 'EXECUTE SQL', 86400) with output;
@@ -647,7 +698,7 @@ execute script tc_watchdog(false, 'IDLE', 86400) with output;
 --execute script tc_watchdog(true, 'BOTH', 10) with output;
 --execute script tc_watchdog(true, 'ALL', 'X') with output;
 
---[[Tesing: Will execute with no action taken - writes to log 
+--[[Tesing: Will execute with with errors, but writes to log 
 --  You should see 3 entries in the log ]]
 --execute script tc_watchdog(true, 'IDLE', 864000) with output;
 --execute script tc_watchdog(true, 'EXECUTE SQL', 864000) with output;
@@ -655,4 +706,4 @@ execute script tc_watchdog(false, 'IDLE', 86400) with output;
 
 --[[ Actual production run to kill transaction conflicts ]]
 
---execute script tc_watchdog(true, 'IDLE', 300) with output;
+execute script tc_watchdog(false, 'EXECUTE SQL', 300) with output;
