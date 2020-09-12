@@ -5,8 +5,11 @@
 # desc: 
        Configuraable script to kill transaction conflicts and log an entry 
        in the tc_log table (created in this script). If there are no current 
-       transaction conflicts, then runnning this script will not impact anything; 
-       it will complete successfully without taking any action
+       transaction conflicts, then runnning this script is harmless. 
+       This script will fail if NO transaction conflicts are found
+       meeting the arguments criteria. We fail the script if no
+       transaction conflict is found for purposes of automation
+       and checking return codes.
        
 # configurations:
     armed
