@@ -433,7 +433,23 @@ if ( not wait_valid ) then -- or not wait_valid ) then
          
         reason_hold = reason_invalid_input_wait_time
      
-        log_list = {log_type, my_sess, sess_hold, reason_hold , user_hold , status_hold, command_hold, duration_hold}
+        log_list = {log_type
+                  
+                  , my_sess
+                  
+                  , sess_hold
+                  
+                  , reason_hold
+                  
+                  , user_hold
+                  
+                  , status_hold
+                  
+                  , command_hold
+                  
+                  , duration_hold
+                  
+                  }
      
         log_insert(log_list)
       
