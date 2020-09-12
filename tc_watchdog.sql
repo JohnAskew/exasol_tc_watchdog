@@ -4,8 +4,9 @@
 -- desc: Configuraable script to kill transaction conflicts and log
 --       an entry in the tc_log table (created in this script).
 --       If there are no current transaction conflicts, then runnning 
---       this script will not impact anything; it will complete 
---       successfully without taking any action.
+--       this script will not impact anything; it will error out 
+--       if no transaction conflicts are found meeting the 
+--       arguements criteria. 
 --
 -- configurations:
 --      armed = Whether to actually kill the transaction conflict. 
@@ -17,7 +18,8 @@
 --              ALL means kill any blocking transaction
 --      wait_time = Seconds session has been in blocking sessions.   
 --
--- usage: EXECUTE SCRIPT tc_watchdog(armed, aggressive_mode, wait_time) <with output>; -- where <with output> is optional.
+-- usage: EXECUTE SCRIPT tc_watchdog(armed, aggressive_mode, wait_time) <with output>;
+--              where <with output> is optional.
 --        
 -- usage notes:
 --       If you are currently executing a long running job and other transactions are 
@@ -37,8 +39,8 @@
 --       will only kill active SQL and leave the sessions in IDLE status alone.
 --       Running with aggressive_mode = 'ALL' will kill any blocking session.
 --
--- To-Do:
---       1. Consolidate all log inserts into calling a log insert function
+-- For explanation of transaction conflicts, see:
+--       https://www.exasol.com/portal/pages/viewpage.action?pageId=22518143
 --       
 --=============================================================================
 
@@ -236,7 +238,15 @@ function log_insert(...)
                   
        if not suc_li then
                   
-           output("Kill_session "..sess_hold.." failed to insert log for invalid value for "..log_type)
+           output("Kill_session "
+           
+                  ..sess_hold
+                  
+                  .." failed to insert log for invalid value for "
+                  
+                  ..log_type
+                  
+                  )
                       
        end -- end if
 end
@@ -264,14 +274,15 @@ end
 --          as if they did.
 
 
-local inputs = {armed = false, aggressive_mode = 'IDLE', wait_time = 300}                        -- Template or Default input table object
+local inputs = {armed = false, aggressive_mode = 'IDLE', wait_time = 300}  -- Template or Default input object
 
---inputs.armed = false                     -- Default: false - don't actually kill session, just report as if you did
+--inputs.armed = false                     -- Default: false - don't actually kill session, 
+                                           --                  just report as if you did
 --                                         --          true - kill the session and report it
 --
---inputs.aggressive_mode = 'IDLE'          -- Default: IDLE = Only kill IDLE sessions; EXECUTE SQL = kill active sessions
+--inputs.aggressive_mode = 'IDLE'          -- Default: IDLE = Only kill IDLE sessions
 --                                         --          EXECUTE SQL = Only kill active SQL
---                                         --          ALL - Kill anything blocking, IDLE or EXECUTE SQL, etc.
+--                                         --          ALL - Kill anything blocking, IDLE or EXECUTE SQL, etc
 --
 --inputs.wait_time = 300                   -- Seconds query has been in transaction conflict state. Base on 
                                            --          field EXA_DBA_TRANSACTION_CONFLCTS.start_time
@@ -356,7 +367,23 @@ if not armed_valid then
          
      reason_hold = reason_invalid_input_armed
      
-     log_list = {log_type, my_sess, sess_hold, reason_hold , user_hold , status_hold, command_hold, duration_hold}
+     log_list = {log_type
+     
+               , my_sess
+               
+               , sess_hold
+               
+               , reason_hold
+               
+               , user_hold
+               
+               , status_hold
+               
+               , command_hold
+               
+               , duration_hold
+               
+                }
      
      log_insert(log_list)
      
@@ -374,7 +401,23 @@ if not aggressive_valid then
          
         reason_hold = reason_invalid_input_aggressive
      
-        log_list = {log_type, my_sess, sess_hold, reason_hold , user_hold , status_hold, command_hold, duration_hold}
+        log_list = {log_type
+                  
+                  , my_sess
+                  
+                  , sess_hold
+                  
+                  , reason_hold
+                  
+                  , user_hold
+                  
+                  , status_hold
+                  
+                  , command_hold
+                  
+                  , duration_hold
+                  
+                  }
      
         log_insert(log_list)
      
@@ -416,6 +459,11 @@ runtime:whoami()
 local function kill_session(...)
 --=====================================
     local kill_session_list = {...}
+    
+    --
+    -- Do NOT make these variables local
+    -- unless you know what you are doing!
+    --
        
     sess_hold    = kill_session_list[1][1]
        
@@ -431,7 +479,12 @@ local function kill_session(...)
         
         suc2_ks, res2_ks = pquery([[kill session ]]..sess_hold)
         
-        assert(suc2_ks, "Function kill_session: Armed mode but failed to kill session "..sess_hold.." Aborting now!")
+        assert(suc2_ks, "Function kill_session: Armed mode but failed to kill session "
+        
+               ..sess_hold
+               
+               .." Aborting now!"
+               )
             
         query([[commit;]])
         
@@ -467,13 +520,31 @@ local function kill_session(...)
         
         suc2_ks, res2_ks = pquery([[select 'kill session ']])
         
+        assert(suc2_ks, "Function kill session running in unarmed mode, failed to execute faux sql. Fix the query. Aborting now!")
+        
         output("Would have killed session "..sess_hold)
             
     end -- end if
         
     if (suc2_ks and runtime.armed) then
         
-        log_list = {log_type, my_sess, sess_hold, reason_hold , user_hold , status_hold, command_hold, duration_hold}
+        log_list = {log_type
+        
+                   , my_sess
+                   
+                   , sess_hold
+                   
+                   , reason_hold
+                   
+                   , user_hold
+                   
+                   , status_hold
+                   
+                   , command_hold
+                   
+                   , duration_hold
+                   
+                   }
      
         log_insert(log_list)
 
@@ -514,7 +585,12 @@ if runtime.aggressive_mode == 'ALL' then
 			    
 	    join exa_dba_transaction_conflicts tc on s.session_id =tc.conflict_session_id
 			
-			where to_char(s.session_id) in (select to_char(conflict_session_id) from exa_dba_transaction_conflicts where stop_time IS NULL) 
+			where to_char(s.session_id) in (select to_char(conflict_session_id) 
+			
+			                from exa_dba_transaction_conflicts 
+			                
+			                  where stop_time IS NULL
+			              ) 
 			 
 		     and s.session_id != '4'
 		     
@@ -556,7 +632,12 @@ else
 			    
 	    join exa_dba_transaction_conflicts tc on s.session_id =tc.conflict_session_id
 			
-		where to_char(s.session_id) in (select to_char(conflict_session_id) from exa_dba_transaction_conflicts where stop_time IS NULL) 
+		where to_char(s.session_id) in (select to_char(conflict_session_id) 
+		                                 
+		                                   from exa_dba_transaction_conflicts 
+		                                    
+		                                      where stop_time IS NULL
+		                                ) 
 			 
 		  and s.status = :am
 		     
@@ -673,12 +754,15 @@ if suc_sl then
 end -- end if
 
 /
-
+--=====================================
+-- TESTING
+--=====================================
 --[[ Testing: Does not execute, only displays runtime info and what would have been killed.
 --            It will generate an error if no transaction conflict is found meeting
---            the criteria (arguments) specified. ]]
+--            the criteria (arguments) specified. Obviously the script fails
+--            if an invalid arguement is specified.]]
 --
---execute script tc_watchdog(false, 'IDEL', 86400) with output;
+execute script tc_watchdog(false, 'IDEL', 86400) with output;
 --execute script tc_watchdog(false, 'IDLE', 'apple') with output;
 --execute script tc_watchdog(false, 'ALL', '10') with output;
 --execute script tc_watchdog(false, 'IDLE', 86400) with output;
@@ -704,6 +788,8 @@ end -- end if
 --execute script tc_watchdog(true, 'EXECUTE SQL', 864000) with output;
 --execute script tc_watchdog(true, 'ALL', 864000) with output;
 
---[[ Actual production run to kill transaction conflicts ]]
-
-execute script tc_watchdog(false, 'EXECUTE SQL', 300) with output;
+--=====================================
+--[[ Actual production run to kill transaction conflicts 
+--    if the arguements are set correctly. ]]
+--=====================================
+--execute script tc_watchdog(false, 'IDLE', 300) with output;
