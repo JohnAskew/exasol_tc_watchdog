@@ -58,9 +58,7 @@ log_schema = 'BIAA_PUBLISH'
 ---------------------------------------
 -- Set the reporting SCHEMA
 ---------------------------------------
-assert(pquery([[OPEN SCHEMA ::lsch]]
-
-       ,{lsch = log_schema})
+assert(pquery([[OPEN SCHEMA ::lsch]],{lsch = log_schema})
                                        
        , "Error on opening schema "
                                        
@@ -164,7 +162,7 @@ reason_invalid_input_armed = ('Not run --> Argument {armed} invalid. Read in '..
 
 reason_invalid_input_aggressive = ('Not run --> Argument {aggressive_mode} invalid. Read in '..tostring(in_aggressive)..[[. Values must be IDLE, EXECUTE SQL, or ALL.]] )
 
-reason_invalid_input_wait_time = ('Not run --> Argument {wait_time} invalid.  Read in '..tostring(in_wait)..[[. Values must be a number. Did you enclose the number in quotes?]])
+reason_invalid_input_wait_time = ('Not run --> Argument {wait_time} invalid.  Read in '..tostring(in_wait)..[[. Values must be a number >= 0. Did you enclose the number in quotes?]])
 
 armed_valid = false
 
@@ -339,7 +337,7 @@ for _, value in ipairs(valid_aggressive) do
      
 end -- end for
 
-runtime.wait_time = in_wait                        -- Seconds query has been in running/IDLE. See EXA_DBA_SESSIONS.duration
+runtime.wait_time = in_wait                        -- Seconds query has been in blocking.
    
 if type(runtime.wait_time) == 'number' then
     
@@ -757,12 +755,14 @@ end -- end if
 --=====================================
 -- TESTING
 --=====================================
---[[ Testing: Does not execute, only displays runtime info and what would have been killed.
+--[[ 
+--  Testing: Does not execute, only displays runtime info and what would have been killed.
 --            It will generate an error if no transaction conflict is found meeting
 --            the criteria (arguments) specified. Obviously the script fails
---            if an invalid arguement is specified.]]
+--            if an invalid arguement is specified.
+--]]
 --
-execute script tc_watchdog(false, 'IDEL', 86400) with output;
+--execute script tc_watchdog(false, 'IDEL', 86400) with output;
 --execute script tc_watchdog(false, 'IDLE', 'apple') with output;
 --execute script tc_watchdog(false, 'ALL', '10') with output;
 --execute script tc_watchdog(false, 'IDLE', 86400) with output;
@@ -775,21 +775,24 @@ execute script tc_watchdog(false, 'IDEL', 86400) with output;
 --execute script tc_watchdog(false, 'ALL', 300) with output;
 --execute script tc_watchdog(false, 'ALL', 10) with output;
 
---[[ Testing: These will fail and write failure to log 
---   You should see 4 failure entries in the log ]]
+--[[ 
+--  Testing: These will fail and write failure to log 
+--   You should see 4 failure entries in the log 
+--]]
 --execute script tc_watchdog('Ture', 'ALL', 10) with output;
 --execute script tc_watchdog(true, 'IDEL', 10) with output;
 --execute script tc_watchdog(true, 'BOTH', 10) with output;
 --execute script tc_watchdog(true, 'ALL', 'X') with output;
 
---[[Tesing: Will execute with with errors, but writes to log 
---  You should see 3 entries in the log ]]
+--[[
+--  Tesing: Will execute with with errors, but writes to log 
+--  You should see 3 entries in the log 
+--]]
 --execute script tc_watchdog(true, 'IDLE', 864000) with output;
 --execute script tc_watchdog(true, 'EXECUTE SQL', 864000) with output;
 --execute script tc_watchdog(true, 'ALL', 864000) with output;
 
 --=====================================
---[[ Actual production run to kill transaction conflicts 
---    if the arguements are set correctly. ]]
+--[[ PRODUCTION ]]
 --=====================================
---execute script tc_watchdog(false, 'IDLE', 300) with output;
+execute script tc_watchdog(false, 'ALL', 300) with output;
