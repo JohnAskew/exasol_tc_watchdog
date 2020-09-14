@@ -257,22 +257,22 @@ end
 -- Defaults for inputs 
 -----------------------------------------
 -- (template with default parameters and arguments)
----Reason: Set up safe mode incase the script
+---Reason: Set up safe mode in case the script
 --         is run with inappropriate script arguments.
 --         We build a non-destructive argument 
 --         list to be used as the template or 
 --         default settings at runtime.
---          At runtime, we instantiate a copy
---          of the template and valiate the script
---          inputs. The script inputs become
---          active if they pass the edit tests,
---          otherwise, our safety net is to use
---          the default settings which do not
---          kill any sessions, only report
---          as if they did.
+--         At runtime, we instantiate a copy
+--         of the template and valiate the script
+--         inputs. The script inputs become
+--         active if they pass the edit tests,
+--         otherwise, our safety net is to use
+--         the default settings which do not
+--         kill any sessions, only report
+--         as if they did.
 
 
-local inputs = {armed = false, aggressive_mode = 'IDLE', wait_time = 300}  -- Template or Default input object
+local inputs = {armed = false, aggressive_mode = 'IDLE', wait_time = 864000}  -- Template or Default input object
 
 --inputs.armed = false                     -- Default: false - don't actually kill session, 
                                            --                  just report as if you did
@@ -338,6 +338,8 @@ for _, value in ipairs(valid_aggressive) do
 end -- end for
 
 runtime.wait_time = in_wait                        -- Seconds query has been in blocking.
+
+wait_valid = false
    
 if type(runtime.wait_time) == 'number' then
     
@@ -345,16 +347,8 @@ if type(runtime.wait_time) == 'number' then
       
          wait_valid = true
      
-     else
-     
-         wait_valid = false
-         
      end -- end if
      
-else
-
-    wait_valid = false
-
 end -- end -if
 
 if not armed_valid then
@@ -811,4 +805,4 @@ end -- end if
 --=====================================
 --[[ PRODUCTION ]]
 --=====================================
-execute script tc_watchdog(false, 'ALL', 300) with output;
+execute script tc_watchdog(true, 'EXECUTE SQL', 10) with output;
