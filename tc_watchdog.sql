@@ -45,7 +45,7 @@
 --=============================================================================
 
 --/
-CREATE OR REPLACE LUA SCRIPT tc_watchdog(in_armed, in_aggressive, in_wait)
+CREATE OR REPLACE LUA SCRIPT tc_watchdog(in_schema, in_armed, in_aggressive, in_wait)
 
 AS 
 
@@ -53,46 +53,8 @@ AS
 --# HOUSEKEEPING
 --#####################################
 
-log_schema = 'BIAA_PUBLISH'
+--log_schema = 'BIAA_PUBLISH'
 
----------------------------------------
--- Set the reporting SCHEMA
----------------------------------------
-assert(pquery([[OPEN SCHEMA ::lsch]],{lsch = log_schema})
-                                       
-       , "Error on opening schema "
-                                       
-       ..log_schema
-                                       
-       ..". Aborting with no action taken"
-                                       
-       )
-    
----------------------------------------
--- Create a log table if not exists. 
--- Avoiding assert to make improve readability.
----------------------------------------
-
-local succ_cr_tbl, res_cr_tbl = pquery([[CREATE TABLE IF NOT EXISTS tc_log(kill_date timestamp
-
-                                       , script_session varchar(20)
-                                       
-                                       , killed_session_id varchar(20)
-                                       
-                                       , reason varchar(300)
-                                       
-                                       , user_name varchar(50)
-                                       
-                                       , status varchar(50)
-                                       
-                                       , command varchar(50)
-                                       
-                                       , duration varchar(50))
-                                       
-                                       ]])
-
-assert(succ_cr_tbl, "Unable to allocate tc_log table to log results. Aborting")
-  
 --=====================================
 local function get_date() 
 --=====================================
@@ -158,11 +120,17 @@ reason_no_transaction_conflicts = 'No open transaction conflicts found meeting i
 
 reason_failed = 'tc_watchdog unable to kill session'
 
+reason_invalid_schema = ('Not run --> Argument {schema} invalid. Read in '..tostring(in_schema)..[[. Must enter existing schema.]]) 
+
+reason_invalid_schema_missing = ('Not run --> Argument {schema} missing. Must enter existing schema.') 
+
 reason_invalid_input_armed = ('Not run --> Argument {armed} invalid. Read in '..tostring(in_armed)..[[. Values must be TRUE or FALSE.]])
 
 reason_invalid_input_aggressive = ('Not run --> Argument {aggressive_mode} invalid. Read in '..tostring(in_aggressive)..[[. Values must be IDLE, EXECUTE SQL, or ALL.]] )
 
 reason_invalid_input_wait_time = ('Not run --> Argument {wait_time} invalid.  Read in '..tostring(in_wait)..[[. Values must be a number >= 0. Did you enclose the number in quotes?]])
+
+schema_valid = false
 
 armed_valid = false
 
@@ -171,6 +139,17 @@ aggressive_valid = false
 wait_valid = false
 
 valid_aggressive = {'IDLE', 'EXECUTE SQL', 'ALL'} --Do not change me unless you know what you are doing
+
+--=====================================
+local function isempty(s)
+--=====================================
+       
+      output("Reporting Schema will be  "..s)
+                
+       return s
+    
+
+end
 
 --=====================================
 function log_insert(...)
@@ -272,7 +251,11 @@ end
 --         as if they did.
 
 
-local inputs = {armed = false, aggressive_mode = 'IDLE', wait_time = 864000}  -- Template or Default input object
+local inputs = {schema = 'DUMMY', armed = false, aggressive_mode = 'IDLE', wait_time = 864000}  -- Template or Default input object
+
+--inputs.schema = DUMMY                    -- Default: DUMMY. This ensures the user
+                                           --          enters a valid schema to own
+                                           --          the TC_LOG table for reporting.
 
 --inputs.armed = false                     -- Default: false - don't actually kill session, 
                                            --                  just report as if you did
@@ -289,7 +272,11 @@ inputs.whoami = function (self) output("Session Runtime INFO: "
                                        
                                        ..my_sess
                                         
-                                       .." ran with options -->  aggressive_mode  is  "
+                                       .." ran with options -->  schema: "
+                                       
+                                       ..self.schema
+                                       
+                                       .."    aggressive_mode  is  "
                                        
                                        ..self.aggressive_mode
                                        
@@ -302,14 +289,70 @@ inputs.whoami = function (self) output("Session Runtime INFO: "
 --=======================================
 -- Input valiation: Build input validation object
 --=======================================
+-----------------------------------------
+-- Validate schema
+-----------------------------------------
+
+local suc_sch, res_sch = pcall(isempty, in_schema)
+
+assert(suc_sch, reason_invalid_schema_missing)
+
+--=======================================
+-- Instantiate runtime object (table)
+--=======================================
 
 local runtime = inputs                   -- Our input validation table which will 
                                          -- hold our runtime arguments as they 
                                          -- are validated in the next step
 
---=======================================
--- Script arguments validation
---=======================================
+---------------------------------------
+-- Set the reporting SCHEMA
+---------------------------------------
+ 
+runtime.schema = in_schema 
+
+---------------------------------------
+-- Try an open schema
+---------------------------------------
+
+assert(pquery([[OPEN SCHEMA ::lsch]],{lsch = runtime.schema}) 
+                                       
+       , "Error on opening schema "
+                                       
+       ..runtime.schema
+                                       
+       ..". Aborting with no action taken"
+                                       
+       )       
+
+
+schema_valid = true -- do I even need this?
+
+---------------------------------------
+-- Create a log table if not exists. 
+---------------------------------------
+
+local succ_cr_tbl, res_cr_tbl = pquery([[CREATE TABLE IF NOT EXISTS tc_log(kill_date timestamp
+
+                                       , script_session varchar(20)
+                                       
+                                       , killed_session_id varchar(20)
+                                       
+                                       , reason varchar(300)
+                                       
+                                       , user_name varchar(50)
+                                       
+                                       , status varchar(50)
+                                       
+                                       , command varchar(50)
+                                       
+                                       , duration varchar(50))
+                                       
+                                       ]])
+
+assert(succ_cr_tbl, "Unable to allocate tc_log table to log results. Aborting")
+  
+
 
 if (string.upper(tostring(in_armed)) == 'FALSE'  or string.upper(tostring(in_armed)) == 'TRUE') then
 
@@ -771,38 +814,39 @@ end -- end if
 --            the criteria (arguments) specified. Obviously the script fails
 --            if an invalid arguement is specified.
 --]]
---
---execute script tc_watchdog(false, 'IDEL', 86400) with output;
---execute script tc_watchdog(false, 'IDLE', 'apple') with output;
---execute script tc_watchdog(false, 'ALL', '10') with output;
---execute script tc_watchdog(false, 'IDLE', 86400) with output;
---execute script tc_watchdog(false, 'IDLE', 300) with output;
---execute script tc_watchdog(false, 'IDLE', 10) with output;
---execute script tc_watchdog(false, 'EXECUTE SQL', 86400) with output;
---execute script tc_watchdog(false, 'EXECUTE SQL', 300) with output;
---execute script tc_watchdog(false, 'EXECUTE SQL', 10) with output;
---execute script tc_watchdog(false, 'ALL', 86400) with output;
---execute script tc_watchdog(false, 'ALL', 300) with output;
---execute script tc_watchdog(false, 'ALL', 10) with output;
+-- Testing in_armed = False
+--execute script tc_watchdog('',false, 'IDEL', 86400) with output;
+--execute script tc_watchdog('BIAA_PUBLISH',false, 'IDEL', 86400) with output;
+--execute script tc_watchdog('BIAA_PUBLISH',false, 'IDLE', 'apple') with output;
+--execute script tc_watchdog('BIAA_PUBLISH',false, 'ALL', '10') with output;
+--execute script tc_watchdog('BIAA_PUBLISH',false, 'IDLE', 86400) with output;
+--execute script tc_watchdog('BIAA_PUBLISH',false, 'IDLE', 300) with output;
+--execute script tc_watchdog('BIAA_PUBLISH',false, 'IDLE', 10) with output;
+--execute script tc_watchdog('BIAA_PUBLISH',false, 'EXECUTE SQL', 86400) with output;
+--execute script tc_watchdog('BIAA_PUBLISH',false, 'EXECUTE SQL', 300) with output;
+--execute script tc_watchdog('BIAA_PUBLISH',false, 'EXECUTE SQL', 10) with output;
+--execute script tc_watchdog('BIAA_PUBLISH',false, 'ALL', 86400) with output;
+--execute script tc_watchdog('BIAA_PUBLISH',false, 'ALL', 300) with output;
+--execute script tc_watchdog('BIAA_PUBLISH',false, 'ALL', 10) with output;
 
 --[[ 
 --  Testing: These will fail and write failure to log 
 --   You should see 4 failure entries in the log 
 --]]
---execute script tc_watchdog('Ture', 'ALL', 10) with output;
---execute script tc_watchdog(true, 'IDEL', 10) with output;
---execute script tc_watchdog(true, 'BOTH', 10) with output;
---execute script tc_watchdog(true, 'ALL', 'X') with output;
+--execute script tc_watchdog('BIAA_PUBLISH','Ture', 'ALL', 10) with output;
+--execute script tc_watchdog('BIAA_PUBLISH',true, 'IDEL', 10) with output;
+--execute script tc_watchdog('BIAA_PUBLISH',true, 'BOTH', 10) with output;
+--execute script tc_watchdog('BIAA_PUBLISH',true, 'ALL','X' ) with output;
 
 --[[
 --  Tesing: Will execute with with errors, but writes to log 
 --  You should see 3 entries in the log 
 --]]
---execute script tc_watchdog(true, 'IDLE', 864000) with output;
---execute script tc_watchdog(true, 'EXECUTE SQL', 864000) with output;
---execute script tc_watchdog(true, 'ALL', 864000) with output;
+--execute script tc_watchdog('BIAA_PUBLISH',true, 'IDLE', 864000) with output;
+--execute script tc_watchdog('BIAA_PUBLISH',true, 'EXECUTE SQL', 864000) with output;
+--execute script tc_watchdog('BIAA_PUBLISH',true, 'ALL', 864000) with output;
 
 --=====================================
 --[[ PRODUCTION ]]
 --=====================================
-execute script tc_watchdog(true, 'EXECUTE SQL', 10) with output;
+execute script tc_watchdog('BIAA_PUBLISH',false, 'ALL', 300) with output;
